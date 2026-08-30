@@ -1,0 +1,25 @@
+i32 i
+i32 r
+u8 nl
+
+load_u8 10
+store_u8 nl
+
+load 0
+store i
+
+load 100
+store r
+
+lbl l
+load @i
+add 1
+store i
+cmp @r
+ifne
+jmp l
+
+out_i @i
+out_c @nl
+
+halt
