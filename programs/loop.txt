@@ -1,14 +1,13 @@
-i32 i
-i32 r
 u8 nl
-
-load_u8 10
+load_u8 '\n'
 store_u8 nl
 
+i32 i
 load 0
 store i
 
-load 100
+i32 r
+load 1000
 store r
 
 lbl l
@@ -19,7 +18,7 @@ cmp @r
 ifne
 jmp l
 
-out_i @i
+out_i32 @i
 out_c @nl
 
 halt

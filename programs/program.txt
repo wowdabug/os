@@ -1,12 +1,6 @@
-s str "Hello, world!"
-s escapes "a\'b\"c\\d\ne\tf\0g"
+u8 x
 
-u8 nl '\n'
+load_u8 '!'
+store_u8 x
 
-out_s str
-out_c @nl
-
-out_s escapes
-out_c @nl
-
-halt
+out_c @x

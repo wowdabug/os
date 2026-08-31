@@ -1,4 +1,3 @@
-// reintroduce escape support
-// macros
-// u8 instructions + u8v
-// refactor compilation
+// macros (NONE, SOME, FALSE, TRUE)
+// instruction macros
+// remove preprocess auto init somehow

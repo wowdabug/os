@@ -60,6 +60,36 @@
         "type": "U8"
     },
     {
+        "opcode": "ADD_U8",
+        "names": ["add_u8"],
+        "type": "U8"
+    },
+    {
+        "opcode": "SUB_U8",
+        "names": ["sub_u8"],
+        "type": "U8"
+    },
+    {
+        "opcode": "MUL_U8",
+        "names": ["mul_u8"],
+        "type": "U8"
+    },
+    {
+        "opcode": "DIV_U8",
+        "names": ["div_u8"],
+        "type": "U8"
+    },
+    {
+        "opcode": "CMP_U8",
+        "names": ["cmp_u8"],
+        "type": "U8"
+    },
+    {
+        "opcode": "OUT_U8",
+        "names": ["out_u8"],
+        "type": "U8"
+    },
+    {
         "opcode": "OUT_C",
         "names": ["out_c"],
         "type": "U8"
@@ -82,6 +112,26 @@
     {
         "opcode": "IFNE",
         "names": ["ifne"],
+        "type": "NONE"
+    },
+    {
+        "opcode": "IFL",
+        "names": ["ifl"],
+        "type": "NONE"
+    },
+    {
+        "opcode": "IFLE",
+        "names": ["ifle"],
+        "type": "NONE"
+    },
+    {
+        "opcode": "IFG",
+        "names": ["ifg"],
+        "type": "NONE"
+    },
+    {
+        "opcode": "IFGE",
+        "names": ["ifge"],
         "type": "NONE"
     },
     {

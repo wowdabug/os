@@ -126,17 +126,12 @@ async function init() {
     types = data.map((el) => getType(el.type));
 }
 
-function compile(program) {
-    const tokens = new Int32Array(MAX_INSTRUCTIONS * MAX_TOKENS);
-    const symbolTable = new Map();
-    
-    const debugTokens = [];
-    const output = [];
-
+function preprocess(program, symbolTable) {
     let insts = split(program, '\n', true, true);
     let staticPtr = STATIC_OFFSET;
 
-    // for padding and correct array access
+    const output = [];
+    
     const allocateStatic = (operand, bytes, offset) => {
         staticPtr += (offset - staticPtr % offset) % offset;
         if (staticPtr + bytes <= STATIC_OFFSET + STATIC_SIZE) {
@@ -154,12 +149,9 @@ function compile(program) {
     for (let i = 0; i < insts.length; ++i) {
         const [opcode, ...operands] = split(insts[i], ' ');
     
-        
         operands.forEach((operand, index) => {
             operands[index] = parseOperand(operand);
         });
-
-        console.log(operands)
 
         switch (opcode) {
             case "":
@@ -175,6 +167,14 @@ function compile(program) {
                 for (let i = 2; i < 2 + operands[0]; ++i) {
                     memI32[addr >> 2] = operands[i] || 0;
                     addr += 4;
+                }
+                break;
+            }
+            case "u8v": {
+                let addr = allocateStatic(operands[1], operands[0], 1);
+                for (let i = 2; i < 2 + operands[0]; ++i) {
+                    memI32[addr] = operands[i] || 0;
+                    ++addr;
                 }
                 break;
             }
@@ -195,7 +195,15 @@ function compile(program) {
         }
     }
 
-    insts = output;
+    return output;
+}
+
+function compile(program) {
+    const tokens = new Int32Array(MAX_INSTRUCTIONS * MAX_TOKENS);
+    const symbolTable = new Map();
+    const debugTokens = [];
+    
+    const insts = preprocess(program, symbolTable);
 
     for (let i = 0; i < insts.length; ++i) {
         let [name, operand] = split(insts[i], ' ');
@@ -275,10 +283,10 @@ function run(tokens) {
                 acc = value | 0;
                 break;
             case OP.STORE_I32:
-                memI32[value >> 2] = acc;
+                memI32[value >> 2] = acc | 0;
                 break;
             case OP.DEREF_I32:
-                acc = memI32[value >> 2] | 0;
+                acc = memI32[value >> 2];
                 break;
             case OP.ADD_I32:
                 acc = (acc + value) | 0;
@@ -296,27 +304,43 @@ function run(tokens) {
                 cmp = (acc - value) | 0;
                 break;
             case OP.OUT_I32:
+            case OP.OUT_U8:
                 terminal.out(value);
                 break;
             case OP.LOAD_U8:
-                acc = value | 0;
+                acc = value & 0xFF;
                 break;
             case OP.STORE_U8:
-                memU8[value] = acc;
+                memU8[value] = acc & 0xFF;
                 break;
-            case OP.DEREF_I32:
-                acc = memU8[value] | 0;
+            case OP.DEREF_U8:
+                acc = memU8[value];
+                break;
+            case OP.ADD_U8:
+                acc = (acc + value) & 0xFF;
+                break;
+            case OP.SUB_U8:
+                acc = (acc - value) & 0xFF;
+                break;
+            case OP.MUL_U8:
+                acc = (acc * value) & 0xFF;
+                break;
+            case OP.DIV_U8:
+                acc = (acc / value) & 0xFF;
+                break;
+            case OP.CMP_U8:
+                cmp = (acc - value) & 0xFF;
                 break;
             case OP.OUT_C:
                 terminal.out(String.fromCharCode(value));
                 break;
             case OP.OUT_S:
-                let end = value;
+                let end = value | 0;
                 while (memU8[end] !== 0) ++end;
                 terminal.out(decoder.decode(memU8.subarray(value, end)));
                 break;
             case OP.JMP:
-                i = value;
+                i = value | 0;
                 break;
             case OP.IFE:
                 if (cmp !== 0) ++i;
