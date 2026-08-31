@@ -1,0 +1,92 @@
+[
+    {
+        "opcode": "LOAD_I32",
+        "names": ["load_i32", "load"],
+        "type": "I32"
+    },
+    {
+        "opcode": "STORE_I32",
+        "names": ["store_i32", "store"],
+        "type": "I32"
+    },
+    {
+        "opcode": "DEREF_I32",
+        "names": ["deref_i32", "deref"],
+        "type": "I32"
+    },
+    {
+        "opcode": "ADD_I32",
+        "names": ["add_i32", "add"],
+        "type": "I32"
+    },
+    {
+        "opcode": "SUB_I32",
+        "names": ["sub_i32", "sub"],
+        "type": "I32"
+    },
+    {
+        "opcode": "MUL_I32",
+        "names": ["mul_i32", "mul"],
+        "type": "I32"
+    },
+    {
+        "opcode": "DIV_I32",
+        "names": ["div_i32", "div"],
+        "type": "I32"
+    },
+    {
+        "opcode": "CMP_I32",
+        "names": ["cmp_i32", "cmp"],
+        "type": "I32"
+    },
+    {
+        "opcode": "OUT_I32",
+        "names": ["out_i32", "out"],
+        "type": "I32"
+    },
+    {
+        "opcode": "LOAD_U8",
+        "names": ["load_u8"],
+        "type": "U8"
+    },
+    {
+        "opcode": "STORE_U8",
+        "names": ["store_u8"],
+        "type": "U8"
+    },
+    {
+        "opcode": "DEREF_U8",
+        "names": ["deref_u8"],
+        "type": "U8"
+    },
+    {
+        "opcode": "OUT_C",
+        "names": ["out_c"],
+        "type": "U8"
+    },
+    {
+        "opcode": "OUT_S",
+        "names": ["out_s"],
+        "type": "U8"
+    },
+    {
+        "opcode": "JMP",
+        "names": ["jmp"],
+        "type": "I32"
+    },
+    {
+        "opcode": "IFE",
+        "names": ["ife"],
+        "type": "NONE"
+    },
+    {
+        "opcode": "IFNE",
+        "names": ["ifne"],
+        "type": "NONE"
+    },
+    {
+        "opcode": "HALT",
+        "names": ["halt"],
+        "type": "NONE"
+    }
+]   

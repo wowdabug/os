@@ -9,32 +9,10 @@ const STATIC_OFFSET = 64;
 const STATIC_SIZE = 64 * 1024;
 
 const HEAP_OFFSET = 64 + (64 * 1024);
-const HEAP_SIZE = RAM_SIZE - HEAP_OFFSET;
+const HEAP_SIZE = RAM_SIZE - HEAP_OFFSET; // fill the rest of space
 
 const MAX_TOKENS = 4;
 const MAX_INSTRUCTIONS = 1024;
-
-const OP = enumObject(
-    "NONE",
-    "LOAD_I32",
-    "STORE_I32",
-    "DEREF_I32",
-    "ADD_I32",
-    "SUB_I32",
-    "MUL_I32",
-    "DIV_I32",
-    "CMP_I32",
-    "OUT_I",
-    "LOAD_U8",
-    "STORE_U8",
-    "DEREF_U8",
-    "OUT_C",
-    "OUT_S",
-    "JMP",
-    "IFE",
-    "IFNE",
-    "HALT"
-);
 
 const TYPE = {
     NONE: 0,
@@ -55,8 +33,15 @@ const memU8 = new Uint8Array(mem);
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-function enumObject(...names) {
-    return Object.fromEntries(names.map((name, i) => [name, i]));
+function getType(str) {
+    switch (str) {
+        case "I32":
+            return TYPE.I32;
+        case "U8":
+            return TYPE.U8;
+        default:
+            return TYPE.NONE;
+    }
 }
 
 function split(str, delimeter, keepEscape) {
@@ -87,92 +72,27 @@ function split(str, delimeter, keepEscape) {
     return arr;
 }
 
-function getOpcode(str) {
-    switch (str) {
-        case "load_i32":    
-        case "load":
-            return OP.LOAD_I32;
-        case "store_i32":   
-        case "store":
-            return OP.STORE_I32;
-        case "deref_i32":
-        case "deref":
-            return OP.DEREF_I32;
-        case "add_i32":     
-        case "add":
-            return OP.ADD_I32;
-        case "sub_i32":   
-        case "sub":
-            return OP.SUB_I32;
-        case "mul_i32":   
-        case "mul":  
-            return OP.MUL_I32;
-        case "div_i32":     
-        case "div":
-            return OP.DIV_I32;
-        case "cmp_i32":
-        case "cmp":
-            return OP.CMP_I32;
-        case "out_i":   
-        case "out":    
-            return OP.OUT_I;
-        case "load_u8":
-            return OP.LOAD_U8;
-        case "store_u8":
-            return OP.STORE_U8;
-        case "deref_u8":
-            return OP.DEREF_U8;
-        case "out_c":       
-            return OP.OUT_C;
-        case "out_s":       
-            return OP.OUT_S;
-        case "jmp":         
-            return OP.JMP;
-        case "ife":
-            return OP.IFE;
-        case "ifne":
-            return OP.IFNE;
-        case "halt":        
-            return OP.HALT;
-        default:            
-            return OP.NONE;
-    }
-}
+let OP;
+let names;
+let types;
 
-function getType(opcode) {
-    switch (opcode) {
-        case OP.LOAD_I32:
-        case OP.STORE_I32:
-        case OP.DEREF_I32:
-        case OP.ADD_I32:
-        case OP.SUB_I32:
-        case OP.MUL_I32:
-        case OP.DIV_I32:
-        case OP.CMP_I32:
-        case OP.OUT_I:
-        case OP.JMP:
-            return TYPE.I32;
-        case OP.LOAD_U8:
-        case OP.STORE_U8:
-        case OP.DEREF_U8:
-        case OP.OUT_C:
-        case OP.OUT_S:      
-            return TYPE.U8;
-        default:            
-            return TYPE.NONE;
-    }
+async function init() {
+    const response = await fetch("insts.json");
+    const data = await response.json();
+
+    OP = Object.fromEntries(data.map((el, i) => [el.opcode, i]));
+    names = Object.fromEntries(data.flatMap((el, i) => el.names.map(name => [name, i])));
+    types = data.map((el) => getType(el.type));
 }
 
 function compile(program) {
-    const start = performance.now();
-
     const tokens = new Int32Array(MAX_INSTRUCTIONS * MAX_TOKENS);
     const symbolTable = new Map();
     
     const debugTokens = [];
     const output = [];
 
-    let instructions = split(program, '\n', true);
+    let insts = split(program, '\n', true);
     let staticPtr = STATIC_OFFSET;
 
     // for padding and correct array access
@@ -190,8 +110,8 @@ function compile(program) {
     };
 
     let j = 0;
-    for (let i = 0; i < instructions.length; ++i) {
-        const [opcode, ...operands] = split(instructions[i], ' ');
+    for (let i = 0; i < insts.length; ++i) {
+        const [opcode, ...operands] = split(insts[i], ' ');
         switch (opcode) {
             case "":
                 break;
@@ -201,7 +121,7 @@ function compile(program) {
             case "u8":
                 memU8[allocateStatic(operands[0], 1, 1)] = operands[1] || 0;
                 break;
-            case "i32v": {
+            case "i32v": { // remove compile time values?
                 let addr = allocateStatic(operands[0], 4 * operands[1], 4);
                 for (let i = 2; i < 2 + operands[1]; ++i) {
                     memI32[addr >> 2] = operands[i] || 0;
@@ -220,16 +140,16 @@ function compile(program) {
                 symbolTable.set(operands[0], j - 1);
                 break;
             default:
-                output.push(instructions[i]);
+                output.push(insts[i]);
                 ++j;
                 break;
         }
     }
 
-    instructions = output;
+    insts = output;
 
-    for (let i = 0; i < instructions.length; ++i) {
-        const [opcode, operand] = split(instructions[i], ' ');
+    for (let i = 0; i < insts.length; ++i) {
+        const [name, operand] = split(insts[i], ' ');
         const base = i * MAX_TOKENS;
         const opcodeOffset = base;
         const typeOffset = base + 1;
@@ -261,12 +181,12 @@ function compile(program) {
             }
         }
 
-        const opcodeId = getOpcode(opcode, mode);
+        const opcodeId = names[name];
         tokens[opcodeOffset] = opcodeId;
-        tokens[typeOffset] = getType(opcodeId);
+        tokens[typeOffset] = types[opcodeId];
         tokens[modeOffset] = mode;
 
-        debugTokens.push([opcode, tokens[opcodeOffset], operand, tokens[operandOffset]]);
+        debugTokens.push([name, tokens[opcodeOffset], operand, tokens[operandOffset]]);
     }
 
     console.log(debugTokens);
@@ -324,7 +244,7 @@ function run(tokens) {
             case OP.CMP_I32:
                 cmp = (acc - value) | 0;
                 break;
-            case OP.OUT_I:
+            case OP.OUT_I32:
                 terminal.out(value);
                 break;
             case OP.LOAD_U8:
@@ -356,7 +276,7 @@ function run(tokens) {
             case OP.HALT:
                 break main;
             default:
-                console.warn("no opcode");
+                console.warn("no opcode: " + tokens[base]);
                 break;
         }
 
@@ -365,6 +285,7 @@ function run(tokens) {
 }
 
 export const lang = {
+    init,
     compile,
     run
 };
