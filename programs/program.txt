@@ -1,0 +1,7 @@
+s str "Hello, world"
+u8 excl '!'
+u8 nl 10
+out_s str
+out_c @excl
+out_c @nl
+halt

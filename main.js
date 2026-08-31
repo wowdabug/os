@@ -1,7 +1,7 @@
 import { lang } from "./lang.js";
 
 async function main() {
-    const response = await fetch("vectors.txt");
+    const response = await fetch("programs/program.txt");
     const program = await response.text();
 
     await lang.init();

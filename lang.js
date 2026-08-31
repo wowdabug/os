@@ -50,22 +50,15 @@ function split(str, delimeter, keepEscape) {
     let escape = false;
     let substring = "";
     for (let i = 0; i < str.length; ++i) {
-        if (escape) {
-            escape = false;
-            substring += str[i];
-        } else if (str[i] === '\\') {
-            escape = true;
-            if (keepEscape) substring += '\\';
-        } else if (str[i] === delimeter) {
+        if (str[i] === '"') {
+            escape = !escape;
+            if (keepEscape) substring += '"';
+        } else if (!escape && str[i] === delimeter) {
             arr.push(substring);
             substring = "";
         } else {
             substring += str[i];
         }
-    }
-
-    if (escape) {
-        substring += "\\";
     }
 
     arr.push(substring);
@@ -109,9 +102,26 @@ function compile(program) {
         return staticPtr - bytes;
     };
 
+    const parseOperand = (operand) => {
+        if (operand &&
+            operand.length === 3 &&
+            operand[0] === '\'' &&
+            operand[2] === '\''
+        ) {
+            return operand[1].charCodeAt(0);
+        } else {
+            return operand;
+        }
+    };
+
     let j = 0;
     for (let i = 0; i < insts.length; ++i) {
         const [opcode, ...operands] = split(insts[i], ' ');
+    
+        operands.forEach((operand, index) => {
+            operands[index] = parseOperand(operand);
+        });
+
         switch (opcode) {
             case "":
                 break;
@@ -121,9 +131,9 @@ function compile(program) {
             case "u8":
                 memU8[allocateStatic(operands[0], 1, 1)] = operands[1] || 0;
                 break;
-            case "i32v": { // remove compile time values?
-                let addr = allocateStatic(operands[0], 4 * operands[1], 4);
-                for (let i = 2; i < 2 + operands[1]; ++i) {
+            case "i32v": {
+                let addr = allocateStatic(operands[1], 4 * operands[0], 4);
+                for (let i = 2; i < 2 + operands[0]; ++i) {
                     memI32[addr >> 2] = operands[i] || 0;
                     addr += 4;
                 }
@@ -149,12 +159,14 @@ function compile(program) {
     insts = output;
 
     for (let i = 0; i < insts.length; ++i) {
-        const [name, operand] = split(insts[i], ' ');
+        let [name, operand] = split(insts[i], ' ');
         const base = i * MAX_TOKENS;
         const opcodeOffset = base;
         const typeOffset = base + 1;
         const modeOffset = base + 2;
         const operandOffset = base + 3;
+
+        operand = parseOperand(operand);
 
         let mode = MODE.NONE;
         if (!operand) {
@@ -174,7 +186,7 @@ function compile(program) {
                 if (symbolTable.has(slicedOperand)) {
                     tokens[operandOffset] = symbolTable.get(slicedOperand);
                 } else {
-                    throw new Error("no symbol");
+                    throw new Error("no symbol: " + slicedOperand);
                 }
             } else {
                 tokens[operandOffset] = number;

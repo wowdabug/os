@@ -1,8 +1,8 @@
 i32 x 10
-s addr The\ address\ of\ x\ is\ 
-s val The\ value\ of\ x\ is\ 
+s addr "The address of x is "
+s val "The value of x is "
 
-i32v xv 3 1 2 3
+i32v 3 xv 1 2 3
 
 out_s addr
 out x
