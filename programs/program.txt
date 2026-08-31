@@ -1,7 +1,12 @@
-s str "Hello, world"
-u8 excl '!'
-u8 nl 10
+s str "Hello, world!"
+s escapes "a\'b\"c\\d\ne\tf\0g"
+
+u8 nl '\n'
+
 out_s str
-out_c @excl
 out_c @nl
+
+out_s escapes
+out_c @nl
+
 halt

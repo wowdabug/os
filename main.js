@@ -7,11 +7,11 @@ async function main() {
     await lang.init();
 
     const start_compile = performance.now();
-    const tokens = lang.compile(program);
+    const bytecode = lang.compile(program);
     console.log("compile ms: " + (performance.now() - start_compile) + '\n')
 
     const start_run = performance.now();
-    lang.run(tokens);
+    lang.run(bytecode);
     console.log("run ms: " + (performance.now() - start_run) + '\n')
 }
 

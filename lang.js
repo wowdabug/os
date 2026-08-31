@@ -44,20 +44,68 @@ function getType(str) {
     }
 }
 
-function split(str, delimeter, keepEscape) {
+function parseEscape(char) {
+    switch (char) {
+        case '\'':
+            return '\'';
+        case '"':
+            return '"';
+        case '\\':
+            return '\\';
+        case 'n':
+            return String.fromCharCode(10);
+        case 't':
+            return String.fromCharCode(9);
+        case '0':
+            return String.fromCharCode(0);
+        default:
+            throw new Error("invalid escape");
+    }
+}
+
+function parseOperand(operand) {
+    if (operand &&
+        operand.length >= 3 &&
+        operand.length <= 4 &&
+        operand[0] === '\'' &&
+        operand[operand.length - 1] === '\''
+    ) {
+        if (operand.length === 4) {
+            if (operand[1] === '\\') {
+                return operand[2].charCodeAt(0);
+            }
+            
+            throw new Error("invalid char: " + operand);
+        }
+            
+        return operand[1].charCodeAt(0);
+    }
+
+    return operand;
+}
+
+function split(str, delimeter, keepEscape, keepQuote) {
     str = str.replaceAll('\r', "");
     const arr = [];
     let escape = false;
+    let quote = false;
     let substring = "";
     for (let i = 0; i < str.length; ++i) {
-        if (str[i] === '"') {
-            escape = !escape;
-            if (keepEscape) substring += '"';
-        } else if (!escape && str[i] === delimeter) {
+        const char = str[i];
+        if (escape) {
+            escape = false;
+            substring += keepEscape ? char : parseEscape(char);
+        } else if (char === '\\') {
+            escape = true;
+            if (keepEscape) substring += '\\';
+        } else if (char === '"') {
+            quote = !quote;
+            if (keepQuote) substring += '"';
+        } else if (!quote && char === delimeter) {
             arr.push(substring);
             substring = "";
         } else {
-            substring += str[i];
+            substring += char;
         }
     }
 
@@ -85,7 +133,7 @@ function compile(program) {
     const debugTokens = [];
     const output = [];
 
-    let insts = split(program, '\n', true);
+    let insts = split(program, '\n', true, true);
     let staticPtr = STATIC_OFFSET;
 
     // for padding and correct array access
@@ -102,25 +150,16 @@ function compile(program) {
         return staticPtr - bytes;
     };
 
-    const parseOperand = (operand) => {
-        if (operand &&
-            operand.length === 3 &&
-            operand[0] === '\'' &&
-            operand[2] === '\''
-        ) {
-            return operand[1].charCodeAt(0);
-        } else {
-            return operand;
-        }
-    };
-
     let j = 0;
     for (let i = 0; i < insts.length; ++i) {
         const [opcode, ...operands] = split(insts[i], ' ');
     
+        
         operands.forEach((operand, index) => {
             operands[index] = parseOperand(operand);
         });
+
+        console.log(operands)
 
         switch (opcode) {
             case "":
