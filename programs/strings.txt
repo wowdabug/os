@@ -1,9 +1,7 @@
 s str "Hello, world!"
-s escapes "a\'b\"c\\d\ne\tf\0g\""
+s escapes "a\'b\"c\\d\ne\tf\0g"
 
 u8 nl '\n'
-u8 temp '\''
-u8 temp2 '\"'
 
 out_s str
 out_c @nl

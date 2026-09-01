@@ -26,6 +26,11 @@ const MODE = {
     DIR: 2
 };
 
+const NONE = 0;
+const SOME = 1;
+const FALSE = 0;
+const TRUE = 1;
+
 const mem = new ArrayBuffer(RAM_SIZE);
 const memI32 = new Int32Array(mem);
 const memU8 = new Uint8Array(mem);
@@ -143,6 +148,30 @@ let OP;
 let names;
 let types;
 
+const allocator = {
+    staticPtr: STATIC_OFFSET,
+
+    staticAlloc(bytes, offset) {
+        this.staticPtr += (offset - this.staticPtr % offset) % offset; // optimize to bitwise ops
+        if (this.staticPtr + bytes <= STATIC_OFFSET + STATIC_SIZE) {
+            console.log(`allocated ${bytes} byte${bytes == 1 ? "" : "s"} at address ${this.staticPtr}`);
+            this.staticPtr += bytes;
+        } else {
+            throw new Error("no static space");
+        }
+
+        return this.staticPtr - bytes;
+    },
+
+    initHeap() {
+
+    },
+
+    heapAlloc() {
+
+    }
+};
+
 async function init() {
     const response = await fetch("insts.json");
     const data = await response.json();
@@ -154,22 +183,7 @@ async function init() {
 
 function preprocess(program, symbolTable) {
     let insts = split(program, '\n');
-    let staticPtr = STATIC_OFFSET;
-
     const output = [];
-    
-    const allocateStatic = (operand, bytes, offset) => {
-        staticPtr += (offset - staticPtr % offset) % offset;
-        if (staticPtr + bytes <= STATIC_OFFSET + STATIC_SIZE) {
-            symbolTable.set(operand, staticPtr);
-            console.log(`allocated ${bytes} byte${bytes == 1 ? "" : "s"} for ${operand} at address ${staticPtr}`);
-            staticPtr += bytes;
-        } else {
-            throw new Error("no static space");
-        }
-
-        return staticPtr - bytes;
-    };
 
     let j = 0;
     for (let i = 0; i < insts.length; ++i) {
@@ -179,37 +193,45 @@ function preprocess(program, symbolTable) {
             operands[index] = parseChar(operand);
         });
 
-        console.log(operands)
-
         switch (opcode) {
             case "":
                 break;
-            case "i32":
-                memI32[allocateStatic(operands[0], 4, 4) >> 2] = operands[1] || 0;
+            case "ptr":
+            case "i32": {
+                const addr = memI32[allocator.staticAlloc(4, 4) >> 2] = operands[1] || 0;
+                symbolTable.set(operands[0], addr);
                 break;
-            case "u8":
-                memU8[allocateStatic(operands[0], 1, 1)] = operands[1] || 0;
+            }
+            case "u8": {
+                const addr = memU8[allocator.staticAlloc(1, 1)] = operands[1] || 0;
+                symbolTable.set(operands[0], addr);
                 break;
+            }
             case "i32v": {
-                let addr = allocateStatic(operands[1], 4 * operands[0], 4);
+                let addr = allocator.staticAlloc(4 * operands[0], 4);
+                symbolTable.set(operands[1], addr);
                 for (let i = 2; i < 2 + operands[0]; ++i) {
                     memI32[addr >> 2] = operands[i] || 0;
                     addr += 4;
                 }
+
                 break;
             }
             case "u8v": {
-                let addr = allocateStatic(operands[1], operands[0], 1);
+                let addr = allocator.staticAlloc(operands[0], 1);
+                symbolTable.set(operands[1], addr);
                 for (let i = 2; i < 2 + operands[0]; ++i) {
                     memI32[addr] = operands[i] || 0;
                     ++addr;
                 }
+
                 break;
             }
             case "s": {
                 operands[1] = parseStr(operands[1]);
                 const bytes = encoder.encode(operands[1]);
-                const addr = allocateStatic(operands[0], bytes.length + 1, 1);
+                const addr = allocator.staticAlloc(bytes.length + 1, 1);
+                symbolTable.set(operands[0], addr);
                 memU8.set(bytes, addr);
                 memU8[addr + bytes.length] = 0;
                 break;
@@ -359,6 +381,8 @@ function run(tokens) {
                 break;
             case OP.CMP_U8:
                 cmp = (acc - value) & 0xFF;
+                break;
+            case OP.ALLOC_U8:
                 break;
             case OP.OUT_C:
                 terminal.out(String.fromCharCode(value));

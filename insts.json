@@ -41,7 +41,7 @@
     },
     {
         "opcode": "OUT_I32",
-        "names": ["out_i32", "out"],
+        "names": ["out_i32"],
         "type": "I32"
     },
     {
@@ -90,8 +90,13 @@
         "type": "U8"
     },
     {
+        "opcode": "ALLOC_U8",
+        "names": ["alloc_u8", "alloc"],
+        "type": "U8"
+    },
+    {
         "opcode": "OUT_C",
-        "names": ["out_c"],
+        "names": ["out_c", "out"],
         "type": "U8"
     },
     {

@@ -1,0 +1,4 @@
+ptr x
+
+load x
+alloc 10
