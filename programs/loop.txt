@@ -1,24 +1,13 @@
-u8 nl
-load_u8 '\n'
-store_u8 nl
+u8 nl '\n'
 
-i32 i
-load 0
-store i
+BEGIN_L
+out_i32 @63
+out '\n'
+END_L 10
 
-i32 r
-load 1000
-store r
-
-lbl l
-load @i
-add 1
-store i
-cmp @r
-ifne
-jmp l
+i32 i 1000
 
 out_i32 @i
-out_c @nl
+out @nl
 
 halt

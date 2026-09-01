@@ -90,11 +90,6 @@
         "type": "U8"
     },
     {
-        "opcode": "ALLOC_U8",
-        "names": ["alloc_u8", "alloc"],
-        "type": "U8"
-    },
-    {
         "opcode": "OUT_C",
         "names": ["out_c", "out"],
         "type": "U8"
@@ -138,6 +133,16 @@
         "opcode": "IFGE",
         "names": ["ifge"],
         "type": "NONE"
+    },
+    {
+        "opcode": "ALLOC",
+        "names": ["alloc"],
+        "type": "I32"
+    },
+    {
+        "opcode": "FREE",
+        "names": ["free"],
+        "type": "I32"
     },
     {
         "opcode": "HALT",

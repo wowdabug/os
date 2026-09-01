@@ -1,0 +1,16 @@
+s true "true"
+s false "false"
+
+i32 x 5
+i32 y 5
+
+load @x
+cmp @y
+
+inc x
+out_i32 @x
+out_c '\n'
+
+dec x
+out_i32 @x
+out_c '\n'

@@ -8,8 +8,9 @@ const REG_SIZE = 64;
 const STATIC_OFFSET = 64;
 const STATIC_SIZE = 64 * 1024;
 
+// TODO: implement heap
 const HEAP_OFFSET = 64 + (64 * 1024);
-const HEAP_SIZE = RAM_SIZE - HEAP_OFFSET; // fill the rest of space
+const HEAP_SIZE = RAM_SIZE - HEAP_OFFSET; 
 
 const MAX_TOKENS = 4;
 const MAX_INSTRUCTIONS = 1024;
@@ -25,11 +26,6 @@ const MODE = {
     IMM: 1,
     DIR: 2
 };
-
-const NONE = 0;
-const SOME = 1;
-const FALSE = 0;
-const TRUE = 1;
 
 const buffer = new ArrayBuffer(RAM_SIZE);
 const view = new DataView(buffer);
@@ -162,12 +158,16 @@ const allocator = {
         return this.staticPtr - bytes;
     },
 
-    initHeap() {
-
+    heapInit() {
+        // TODO
     },
 
     heapAlloc() {
+        // TODO
+    },
 
+    heapFree() {
+        // TODO
     }
 };
 
@@ -183,6 +183,8 @@ async function init() {
 function preprocess(program, symbolTable) {
     let insts = split(program, '\n');
     const output = [];
+
+    let loopPtr = 0;
 
     let j = 0;
     for (let i = 0; i < insts.length; ++i) {
@@ -237,8 +239,51 @@ function preprocess(program, symbolTable) {
                 U8array[addr + bytes.length] = 0;
                 break;
             }
-            case "lbl":
+            case "lbl": {}
                 symbolTable.set(operands[0], j - 1);
+                break;
+            case "INC":
+                const incInsts = [
+                    "load @" + operands[0],
+                    "add 1",
+                    "store " + operands[0]
+                ];
+
+                j += 3;
+                output.push(...incInsts);
+                break;
+            case "DEC":
+                const decInsts = [
+                    "load @" + operands[0],
+                    "sub 1",
+                    "store " + operands[0]
+                ];
+
+                j += 3;
+                output.push(...decInsts);
+                break;
+            case "BEGIN_L":
+                const beginInsts = [
+                    "load 0",
+                    "store 63",
+                ];
+
+                loopPtr = j + 1;
+                j += 2;
+                output.push(...beginInsts);
+                break;
+            case "END_L":
+                const endInsts = [
+                    "load @63",
+                    "add 1",
+                    "store 63",
+                    "cmp " + operands[0],
+                    "ifne",
+                    "jmp " + loopPtr
+                ];
+
+                j += 6;
+                output.push(...endInsts);
                 break;
             default:
                 output.push(insts[i]);
@@ -383,15 +428,13 @@ function run(tokens) {
             case OP.CMP_U8:
                 cmp = (acc - value) & 0xFF;
                 break;
-            case OP.ALLOC_U8:
-                break;
             case OP.OUT_C:
                 terminal.out(String.fromCharCode(value));
                 break;
             case OP.OUT_S:
                 let end = value | 0;
                 while (U8array[end] !== 0) ++end;
-                terminal.out(decoder.decode(U8array.subarray(value, end)));
+                terminal.out(decoder.decode(U8array.subarray(value | 0, end)));
                 break;
             case OP.JMP:
                 i = value | 0;
@@ -401,6 +444,18 @@ function run(tokens) {
                 break;
             case OP.IFNE:
                 if (cmp === 0) ++i;
+                break;
+            case OP.IFL:
+                if (cmp <= 0) ++i;
+                break;
+            case OP.IFLE:
+                if (cmp < 0) ++i;
+                break;
+            case OP.IFG:
+                if (cmp >= 0) ++i;
+                break;
+            case OP.IFGE:
+                if (cmp > 0) ++i;
                 break;
             case OP.HALT:
                 break main;

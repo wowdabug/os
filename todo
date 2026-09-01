@@ -1,4 +1,7 @@
 // macros (NONE, SOME, FALSE, TRUE)
-// instruction macros
+// more function macros
 // make static variable order matter and add popping
-// implement ifg ifge ifl ifle
+// check register bounds during compilation
+// AND, OR, NOT
+// bitwise ops
+// system registers
