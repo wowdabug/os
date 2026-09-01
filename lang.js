@@ -31,9 +31,9 @@ const SOME = 1;
 const FALSE = 0;
 const TRUE = 1;
 
-const mem = new ArrayBuffer(RAM_SIZE);
-const memI32 = new Int32Array(mem);
-const memU8 = new Uint8Array(mem);
+const buffer = new ArrayBuffer(RAM_SIZE);
+const view = new DataView(buffer);
+const U8array = new Uint8Array(buffer);
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -151,8 +151,7 @@ let types;
 const allocator = {
     staticPtr: STATIC_OFFSET,
 
-    staticAlloc(bytes, offset) {
-        this.staticPtr += (offset - this.staticPtr % offset) % offset; // optimize to bitwise ops
+    staticAlloc(bytes) {
         if (this.staticPtr + bytes <= STATIC_OFFSET + STATIC_SIZE) {
             console.log(`allocated ${bytes} byte${bytes == 1 ? "" : "s"} at address ${this.staticPtr}`);
             this.staticPtr += bytes;
@@ -198,30 +197,32 @@ function preprocess(program, symbolTable) {
                 break;
             case "ptr":
             case "i32": {
-                const addr = memI32[allocator.staticAlloc(4, 4) >> 2] = operands[1] || 0;
+                const addr = allocator.staticAlloc(4);
+                view.setInt32(addr, operands[1] || 0, true);
                 symbolTable.set(operands[0], addr);
                 break;
             }
             case "u8": {
-                const addr = memU8[allocator.staticAlloc(1, 1)] = operands[1] || 0;
+                const addr = allocator.staticAlloc(1);
+                U8array[addr] = operands[1] || 0;
                 symbolTable.set(operands[0], addr);
                 break;
             }
             case "i32v": {
-                let addr = allocator.staticAlloc(4 * operands[0], 4);
+                let addr = allocator.staticAlloc(4 * operands[0]);
                 symbolTable.set(operands[1], addr);
                 for (let i = 2; i < 2 + operands[0]; ++i) {
-                    memI32[addr >> 2] = operands[i] || 0;
+                    view.setInt32(addr, operands[i] || 0, true);
                     addr += 4;
                 }
 
                 break;
             }
             case "u8v": {
-                let addr = allocator.staticAlloc(operands[0], 1);
+                let addr = allocator.staticAlloc(operands[0]);
                 symbolTable.set(operands[1], addr);
                 for (let i = 2; i < 2 + operands[0]; ++i) {
-                    memI32[addr] = operands[i] || 0;
+                    U8array[addr] = operands[i] || 0;
                     ++addr;
                 }
 
@@ -230,10 +231,10 @@ function preprocess(program, symbolTable) {
             case "s": {
                 operands[1] = parseStr(operands[1]);
                 const bytes = encoder.encode(operands[1]);
-                const addr = allocator.staticAlloc(bytes.length + 1, 1);
+                const addr = allocator.staticAlloc(bytes.length + 1);
                 symbolTable.set(operands[0], addr);
-                memU8.set(bytes, addr);
-                memU8[addr + bytes.length] = 0;
+                U8array.set(bytes, addr);
+                U8array[addr + bytes.length] = 0;
                 break;
             }
             case "lbl":
@@ -319,10 +320,10 @@ function run(tokens) {
         } else {
             switch (tokens[base + 1]) {
                 case TYPE.I32:
-                    value = memI32[operand >> 2];
+                    value = view.getInt32(operand, true);
                     break;
                 case TYPE.U8:
-                    value = memU8[operand];
+                    value = U8array[operand];
                     break;
                 default:
                     value = 0;
@@ -334,10 +335,10 @@ function run(tokens) {
                 acc = value | 0;
                 break;
             case OP.STORE_I32:
-                memI32[value >> 2] = acc | 0;
+                view.setInt32(value, acc | 0, true);
                 break;
             case OP.DEREF_I32:
-                acc = memI32[value >> 2];
+                acc = view.getInt32(value, true);
                 break;
             case OP.ADD_I32:
                 acc = (acc + value) | 0;
@@ -362,10 +363,10 @@ function run(tokens) {
                 acc = value & 0xFF;
                 break;
             case OP.STORE_U8:
-                memU8[value] = acc & 0xFF;
+                U8array[value] = acc & 0xFF;
                 break;
             case OP.DEREF_U8:
-                acc = memU8[value];
+                acc = U8array[value];
                 break;
             case OP.ADD_U8:
                 acc = (acc + value) & 0xFF;
@@ -389,8 +390,8 @@ function run(tokens) {
                 break;
             case OP.OUT_S:
                 let end = value | 0;
-                while (memU8[end] !== 0) ++end;
-                terminal.out(decoder.decode(memU8.subarray(value, end)));
+                while (U8array[end] !== 0) ++end;
+                terminal.out(decoder.decode(U8array.subarray(value, end)));
                 break;
             case OP.JMP:
                 i = value | 0;
