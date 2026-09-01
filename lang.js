@@ -44,7 +44,7 @@ function getType(str) {
     }
 }
 
-function parseEscape(char) {
+function getEscape(char) {
     switch (char) {
         case '\'':
             return '\'';
@@ -63,54 +63,80 @@ function parseEscape(char) {
     }
 }
 
-function parseOperand(operand) {
-    if (operand &&
-        operand.length >= 3 &&
-        operand.length <= 4 &&
-        operand[0] === '\'' &&
-        operand[operand.length - 1] === '\''
+function parseChar(str) {
+    if (str &&
+        str[0] === '\'' &&
+        str[str.length - 1] === '\''
     ) {
-        if (operand.length === 4) {
-            if (operand[1] === '\\') {
-                return operand[2].charCodeAt(0);
-            }
-            
-            throw new Error("invalid char: " + operand);
+        if (str.length === 3) {
+            return str[1].charCodeAt(0);
         }
-            
-        return operand[1].charCodeAt(0);
+
+        if (str.length === 4 && str[1] === '\\') {
+            return getEscape(str[2]).charCodeAt(0);
+        } 
+
+        throw new Error("invalid char: " + str);
     }
 
-    return operand;
+    return str;
 }
 
-function split(str, delimeter, keepEscape, keepQuote) {
+function parseStr(str) {
+    if (str &&
+        str[0] === '"' &&
+        str[str.length - 1] === '"'
+    ) {
+        let output = "";
+
+        for (let i = 1; i < str.length - 1; ++i) {
+            if (str[i] === '\\') {
+                ++i;
+                output += getEscape(str[i]);
+            } else {
+                output += str[i];
+            }
+        }
+
+        return output;
+    }
+
+    return str;
+}
+
+function split(str, delimeter) {
     str = str.replaceAll('\r', "");
-    const arr = [];
-    let escape = false;
+
+    const output = [];
     let quote = false;
+    let escape = false;
     let substring = "";
+
     for (let i = 0; i < str.length; ++i) {
         const char = str[i];
+
         if (escape) {
             escape = false;
-            substring += keepEscape ? char : parseEscape(char);
+            substring += char;
         } else if (char === '\\') {
             escape = true;
-            if (keepEscape) substring += '\\';
-        } else if (char === '"') {
-            quote = !quote;
-            if (keepQuote) substring += '"';
+            substring += char;
+        } else if (char === quote) {
+            quote = null;
+            substring += char;
+        } else if (!quote && (char === '\'' || char === '"')) {
+            quote = char;
+            substring += char;
         } else if (!quote && char === delimeter) {
-            arr.push(substring);
+            output.push(substring);
             substring = "";
         } else {
             substring += char;
         }
     }
 
-    arr.push(substring);
-    return arr;
+    output.push(substring);
+    return output;
 }
 
 let OP;
@@ -127,7 +153,7 @@ async function init() {
 }
 
 function preprocess(program, symbolTable) {
-    let insts = split(program, '\n', true, true);
+    let insts = split(program, '\n');
     let staticPtr = STATIC_OFFSET;
 
     const output = [];
@@ -150,8 +176,10 @@ function preprocess(program, symbolTable) {
         const [opcode, ...operands] = split(insts[i], ' ');
     
         operands.forEach((operand, index) => {
-            operands[index] = parseOperand(operand);
+            operands[index] = parseChar(operand);
         });
+
+        console.log(operands)
 
         switch (opcode) {
             case "":
@@ -179,6 +207,7 @@ function preprocess(program, symbolTable) {
                 break;
             }
             case "s": {
+                operands[1] = parseStr(operands[1]);
                 const bytes = encoder.encode(operands[1]);
                 const addr = allocateStatic(operands[0], bytes.length + 1, 1);
                 memU8.set(bytes, addr);
@@ -213,7 +242,7 @@ function compile(program) {
         const modeOffset = base + 2;
         const operandOffset = base + 3;
 
-        operand = parseOperand(operand);
+        operand = parseChar(operand);
 
         let mode = MODE.NONE;
         if (!operand) {

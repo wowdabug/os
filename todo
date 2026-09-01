@@ -1,4 +1,4 @@
 // macros (NONE, SOME, FALSE, TRUE)
 // instruction macros
-// remove preprocess auto init somehow
-// make static variable order matter and add del/popping
+// make static variable order matter and add popping
+// implement ifg ifge ifl ifle
