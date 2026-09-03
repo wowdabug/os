@@ -1,7 +1,6 @@
 // macros (NONE, SOME, FALSE, TRUE)
 // more function macros
-// make static variable order matter and add popping
-// check register bounds during compilation
 // AND, OR, NOT
-// bitwise ops
-// system registers
+// bitwise ops?
+// cast required
+// give std loop call stack

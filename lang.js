@@ -2,14 +2,17 @@ import { terminal } from "./terminal.js";
 
 const RAM_SIZE = 1024 * 1024;
 
-const REG_OFFSET = 0;
-const REG_SIZE = 64;
+const SYS_REG_OFFSET = 0;
+const SYS_REG_SIZE = 64;
 
-const STATIC_OFFSET = 64;
-const STATIC_SIZE = 64 * 1024;
+const USER_REG_OFFSET = 64;
+const USER_REG_SIZE = 64;
+
+const STATIC_REG_OFFSET = 128;
+const STATIC_REG_SIZE = 64 * 1024;
 
 // TODO: implement heap
-const HEAP_OFFSET = 64 + (64 * 1024);
+const HEAP_OFFSET = 128 + (64 * 1024);
 const HEAP_SIZE = RAM_SIZE - HEAP_OFFSET; 
 
 const MAX_TOKENS = 4;
@@ -22,10 +25,15 @@ const TYPE = {
 };
 
 const MODE = {
-    NONE: 0,
-    IMM: 1,
-    DIR: 2
+    IMM: 0,
+    DIR: 1,
 };
+
+const OPMODE = {
+    IMM: 0,
+    DIR: 1,
+    SYS: 2 
+}
 
 const buffer = new ArrayBuffer(RAM_SIZE);
 const view = new DataView(buffer);
@@ -36,12 +44,35 @@ const decoder = new TextDecoder();
 
 function getType(str) {
     switch (str) {
+        case "PTR":
         case "I32":
             return TYPE.I32;
         case "U8":
             return TYPE.U8;
         default:
             return TYPE.NONE;
+    }
+}
+
+function getMode(str) {
+    switch (str) {
+        case "IMM":
+            return OPMODE.IMM;
+        case "DIR":
+            return OPMODE.DIR;
+        default:
+            return OPMODE.IMM;
+    }
+}
+
+function getSize(type) {
+    switch (type) {
+        case TYPE.I32:
+            return 4;
+        case TYPE.U8:
+            return 1;
+        default:
+            throw new Error("???");
     }
 }
 
@@ -143,12 +174,13 @@ function split(str, delimeter) {
 let OP;
 let names;
 let types;
+let modes;
 
 const allocator = {
-    staticPtr: STATIC_OFFSET,
+    staticPtr: STATIC_REG_OFFSET,
 
     staticAlloc(bytes) {
-        if (this.staticPtr + bytes <= STATIC_OFFSET + STATIC_SIZE) {
+        if (this.staticPtr + bytes <= STATIC_REG_OFFSET + STATIC_REG_SIZE) {
             console.log(`allocated ${bytes} byte${bytes == 1 ? "" : "s"} at address ${this.staticPtr}`);
             this.staticPtr += bytes;
         } else {
@@ -178,13 +210,17 @@ async function init() {
     OP = Object.fromEntries(data.map((el, i) => [el.opcode, i]));
     names = Object.fromEntries(data.flatMap((el, i) => el.names.map(name => [name, i])));
     types = data.map((el) => getType(el.type));
+    modes = data.map((el) => getMode(el.mode || "IMM"));
 }
 
 function preprocess(program, symbolTable) {
     let insts = split(program, '\n');
     const output = [];
 
-    let loopPtr = 0;
+    let loopPtr;
+    let loopIndex;
+    let loopMin;
+    let loopMax;
 
     let j = 0;
     for (let i = 0; i < insts.length; ++i) {
@@ -242,49 +278,85 @@ function preprocess(program, symbolTable) {
             case "lbl": {}
                 symbolTable.set(operands[0], j - 1);
                 break;
-            case "INC":
-                const incInsts = [
+            case "std_inc_u8": {
+                const macroInsts = [
+                    "load_u8 @" + operands[0],
+                    "add_u8 1",
+                    "store_u8 " + operands[0]
+                ];
+
+                j += macroInsts.length;
+                output.push(...macroInsts);
+                break;
+            }
+            case "std_dec_u8": {
+                const macroInsts = [
+                    "load_u8 @" + operands[0],
+                    "sub_u8 1",
+                    "store_u8 " + operands[0]
+                ];
+
+                j += macroInsts.length;
+                output.push(...macroInsts);
+                break;
+            }
+            case "std_inc_i32": {
+                const macroInsts = [
                     "load @" + operands[0],
                     "add 1",
                     "store " + operands[0]
                 ];
 
-                j += 3;
-                output.push(...incInsts);
+                j += macroInsts.length;
+                output.push(...macroInsts);
                 break;
-            case "DEC":
-                const decInsts = [
+            }
+            case "std_dec_i32": {
+                const macroInsts = [
                     "load @" + operands[0],
                     "sub 1",
                     "store " + operands[0]
                 ];
 
-                j += 3;
-                output.push(...decInsts);
+                j += macroInsts.length;
+                output.push(...macroInsts);
                 break;
-            case "BEGIN_L":
-                const beginInsts = [
-                    "load 0",
-                    "store 63",
+            }
+            case "std_loop": {
+                loopPtr = j + 1;
+                loopIndex = operands[0];
+                loopMin = operands[1];
+                loopMax = operands[2];
+
+                const macroInsts = [
+                    "load " + loopMin,
+                    "store " + loopIndex,
                 ];
 
-                loopPtr = j + 1;
-                j += 2;
-                output.push(...beginInsts);
+                j += macroInsts.length;
+                output.push(...macroInsts);
                 break;
-            case "END_L":
-                const endInsts = [
-                    "load @63",
+            }
+            case "std_loop_end": {
+                if (!loopPtr || !loopIndex || !loopMin || !loopMax) {
+                    throw new Error("no begin inst")
+                }
+
+                const macroInsts = [
+                    "load @" + loopIndex,
                     "add 1",
-                    "store 63",
-                    "cmp " + operands[0],
+                    "store " + loopIndex,
+                    "cmp " + loopMax,
                     "ifne",
                     "jmp " + loopPtr
                 ];
 
-                j += 6;
-                output.push(...endInsts);
+                loopPtr = null;
+
+                j += macroInsts.length;
+                output.push(...macroInsts);
                 break;
+            }
             default:
                 output.push(insts[i]);
                 ++j;
@@ -312,6 +384,10 @@ function compile(program) {
 
         operand = parseChar(operand);
 
+        const opcodeId = names[name];
+        tokens[opcodeOffset] = opcodeId;
+        tokens[typeOffset] = types[opcodeId];
+
         let mode = MODE.NONE;
         if (!operand) {
             tokens[operandOffset] = 0;
@@ -325,7 +401,7 @@ function compile(program) {
                 mode = MODE.IMM;
             }
 
-            const number = parseInt(slicedOperand); // write own
+            let number = parseInt(slicedOperand); // write own
             if (Number.isNaN(number)) {
                 if (symbolTable.has(slicedOperand)) {
                     tokens[operandOffset] = symbolTable.get(slicedOperand);
@@ -333,13 +409,20 @@ function compile(program) {
                     throw new Error("no symbol: " + slicedOperand);
                 }
             } else {
+                if (mode == MODE.DIR || modes[opcodeId] == MODE.DIR) {
+                    if (number < 0 ||
+                        number > USER_REG_SIZE - getSize(types[opcodeId])
+                    ) {
+                        throw new Error("user reg index invalid");
+                    }
+
+                   number += USER_REG_OFFSET;
+                }
+
                 tokens[operandOffset] = number;
             }
         }
 
-        const opcodeId = names[name];
-        tokens[opcodeOffset] = opcodeId;
-        tokens[typeOffset] = types[opcodeId];
         tokens[modeOffset] = mode;
 
         debugTokens.push([name, tokens[opcodeOffset], operand, tokens[operandOffset]]);
@@ -376,34 +459,6 @@ function run(tokens) {
         }
         
         switch (tokens[base]) {
-            case OP.LOAD_I32:
-                acc = value | 0;
-                break;
-            case OP.STORE_I32:
-                view.setInt32(value, acc | 0, true);
-                break;
-            case OP.DEREF_I32:
-                acc = view.getInt32(value, true);
-                break;
-            case OP.ADD_I32:
-                acc = (acc + value) | 0;
-                break;
-            case OP.SUB_I32:
-                acc = (acc - value) | 0;
-                break;
-            case OP.MUL_I32:
-                acc = (acc * value) | 0;
-                break;
-            case OP.DIV_I32:
-                acc = (acc / value) | 0;
-                break;
-            case OP.CMP_I32:
-                cmp = (acc - value) | 0;
-                break;
-            case OP.OUT_I32:
-            case OP.OUT_U8:
-                terminal.out(value);
-                break;
             case OP.LOAD_U8:
                 acc = value & 0xFF;
                 break;
@@ -427,6 +482,34 @@ function run(tokens) {
                 break;
             case OP.CMP_U8:
                 cmp = (acc - value) & 0xFF;
+                break;
+            case OP.OUT_U8:
+            case OP.OUT_I32:
+                terminal.out(value);
+                break;
+            case OP.LOAD_I32:
+                acc = value | 0;
+                break;
+            case OP.STORE_I32:
+                view.setInt32(value, acc, true);
+                break;
+            case OP.DEREF_I32:
+                acc = view.getInt32(value, true);
+                break;
+            case OP.ADD_I32:
+                acc = (acc + value) | 0;
+                break;
+            case OP.SUB_I32:
+                acc = (acc - value) | 0;
+                break;
+            case OP.MUL_I32:
+                acc = (acc * value) | 0;
+                break;
+            case OP.DIV_I32:
+                acc = (acc / value) | 0;
+                break;
+            case OP.CMP_I32:
+                cmp = (acc - value) | 0;
                 break;
             case OP.OUT_C:
                 terminal.out(String.fromCharCode(value));

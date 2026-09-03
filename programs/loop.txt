@@ -1,13 +1,6 @@
-u8 nl '\n'
+i32 i
+std_loop i 0 256
+out_c @i
+std_loop_end
 
-BEGIN_L
-out_i32 @63
-out '\n'
-END_L 10
-
-i32 i 1000
-
-out_i32 @i
-out @nl
-
-halt
+out 10
