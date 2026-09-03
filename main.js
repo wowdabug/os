@@ -1,18 +1,12 @@
-import { lang } from "./lang.js";
+import { lang } from "./lang/main.js";
 
 async function main() {
-    const response = await fetch("programs/loop.txt");
-    const program = await response.text();
+    const response = await fetch("lang/examples/loop.txt");
+    const text = await response.text();
 
-    await lang.init();
-
-    const start_compile = performance.now();
-    const bytecode = lang.compile(program);
-    console.log("compile ms: " + (performance.now() - start_compile) + '\n')
-
-    const start_run = performance.now();
-    lang.run(bytecode);
-    console.log("run ms: " + (performance.now() - start_run) + '\n')
+    await lang.load();
+    const program = lang.compile(text);
+    lang.run(program);
 }
 
 main();

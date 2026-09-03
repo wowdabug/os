@@ -1,0 +1,15 @@
+i32 x
+
+i32 i
+i32 j
+std_loop i 0 16
+    std_loop j 0 16
+        load @i
+        add @j
+        store x
+        out_i32 @x
+        out '\n'
+    std_loop_end
+std_loop_end
+
+out 10

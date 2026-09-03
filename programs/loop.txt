@@ -1,6 +1,0 @@
-i32 i
-std_loop i 0 256
-out_c @i
-std_loop_end
-
-out 10

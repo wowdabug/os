@@ -1,6 +1,6 @@
-// macros (NONE, SOME, FALSE, TRUE)
-// more function macros
+// macros (none, some, false, true)
 // AND, OR, NOT
-// bitwise ops?
-// cast required
-// give std loop call stack
+// bitwise ops
+// required cast and compile time type checking
+// implement alloc, free
+// remove switches in compiler.js
