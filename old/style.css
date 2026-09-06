@@ -6,16 +6,15 @@ html, body {
     overflow: hidden;
 }
 
-body {
-    font-family: Arial;
-    display: flex;
-}
-
 #terminal {
-    background: #222222;
-    color: #dddddd;
     width: 100%;
-    flex: 1;
+    height: 100%;
+    padding: 4px;
+    font-family: Arial;
+    background: #111;
+    box-sizing: border-box;
+    color: #ccc;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
     overflow-y: auto;
 }

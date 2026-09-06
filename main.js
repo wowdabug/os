@@ -1,12 +1,12 @@
-import { lang } from "./lang/main.js";
+import { asm } from "./asm/main.js";
 
 async function main() {
-    const response = await fetch("lang/examples/loop.txt");
+    const response = await fetch("asm/examples/example.txt")
     const text = await response.text();
 
-    await lang.load();
-    const program = lang.compile(text);
-    lang.run(program);
+    const program = asm.compile(text);
+    console.log(program);
+    asm.run(program);
 }
 
 main();
