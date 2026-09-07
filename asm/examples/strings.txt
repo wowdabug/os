@@ -1,0 +1,14 @@
+s str "Hello, world!"
+s escapes "a\'b\"c\\d\ne\tf\0g"
+
+c nl '\n'
+
+out_s str
+out_c @nl
+
+out_s escapes
+out_c @nl
+
+flush
+
+halt

@@ -8,16 +8,16 @@ load_i 0
 store i
 lbl l
 
-load arr
-add @i
-store addr
-deref @addr
-store val
+    load arr
+    add @i
+    store addr
+    deref @addr
+    store val
 
-# out_i @addr
-# out_c '\n'
-out_i @val
-out_c '\n'
+    # out_i @addr
+    # out_c '\n'
+    out_i @val
+    out_c '\n'
 
 load @i
 add_i 4

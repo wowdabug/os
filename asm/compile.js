@@ -301,12 +301,12 @@ function allocChar() {
 }
 
 function allocStr(str) {
-    if (this.strs.has(str)) {
-        return this.strs.get(str);
+    if (staticStrs.has(str)) {
+        return staticStrs.get(str);
     } else {
         const bytes = []
-        bytes.push(...this.encoder.encode(str), 0);
-        const addr = this.alloc(bytes.length);
+        bytes.push(...encoder.encode(str), 0);
+        const addr = alloc(bytes.length);
         staticData.push(bytes, addr);
         staticStrs.set(str, addr);
         return addr;
