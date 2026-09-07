@@ -7,7 +7,7 @@ import {
     TYPE_SUFFIXES, 
     OP_MODES,
     OP_TYPES 
-} from "./main.js";
+} from './main.js';
 
 function isLetter(char) {
     const code = char.charCodeAt(0);
@@ -61,7 +61,7 @@ function getOpcode(str, type) {
     }
 
     if (!opcode) {
-        throw new Error("invalid opcode: " + str + ", " + type)
+        throw new Error('invalid opcode: ' + str + ', ' + type)
     }
 
     return opcode;
@@ -279,10 +279,10 @@ function getBytes(type, value) {
 
 function alloc(bytes) {
     if (staticPtr + bytes <= MEM.STATIC_REG_OFFSET + MEM.STATIC_REG_SIZE) {
-        console.log(`allocated ${bytes} byte${bytes == 1 ? "" : "s"} at address ${staticPtr}`);
+        console.log(`allocated ${bytes} byte${bytes == 1 ? '' : 's'} at address ${staticPtr}`);
         staticPtr += bytes;
     } else {
-        throw new Error("no static space");
+        throw new Error('no static space');
     }
 
     return staticPtr - bytes;
@@ -307,15 +307,14 @@ function allocStr(str) {
         const bytes = []
         bytes.push(...this.encoder.encode(str), 0);
         const addr = this.alloc(bytes.length);
-        this.data.push(bytes, addr);
-        this.strs.set(str, addr);
+        staticData.push(bytes, addr);
+        staticStrs.set(str, addr);
         return addr;
     }
 }
 
 function initVar(type, strs) {
     const addr = allocVar(type);
-    const value = parseNum(strs[1] || 0).value;
     staticData.push(getBytes(type, parseNum(strs[1] || 0).value), addr);
     staticSymbols.set(strs[0], {type: type, value: addr});
 }
@@ -329,7 +328,7 @@ function initArr(type, strs) {
     }
 
     staticData.push(bytes, addr);
-    staticSymbols.set(strs[0], addr);
+    staticSymbols.set(strs[0], {type: type, value: addr});
 }
 
 function initChar(strs) {
@@ -428,7 +427,7 @@ export function compile(text) {
                 parseStr(operand);
 
             if (!parsed) {
-                throw new Error("operand invalid");
+                throw new Error('operand invalid');
             }
 
             if (parsed.type === PARSE_TYPE.NUM) {
@@ -471,7 +470,7 @@ export function compile(text) {
 
             } else if (parsed.type === PARSE_TYPE.VAR) {
                 if (!staticSymbols.has(parsed.value)) {
-                    throw new Error("var not declared: " + parsed.value);
+                    throw new Error('var not declared: ' + parsed.value);
                 }
 
                 const data = staticSymbols.get(parsed.value);
@@ -491,14 +490,14 @@ export function compile(text) {
 
         const opcodeId = getOpcode(opcode, type);
         if (!opcodeId) {
-            throw new Error("unsupported type");
+            throw new Error('unsupported type');
         }
 
         const opcodeType = OP_TYPES[opcodeId];
         if (!type) {
             type = opcodeType;
         } else if (opcodeType != type) {
-            throw new Error("mismatched types: " + opcodeType + ", " + type);
+            throw new Error('mismatched types: ' + opcodeType + ', ' + type);
         }
 
         tokensI32[opcodeOffset] = opcodeId;

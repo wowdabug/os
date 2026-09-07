@@ -1,3 +1,4 @@
 - compile time type range limits
 - compile.js refactoring
 - inst limit check
+- true false null

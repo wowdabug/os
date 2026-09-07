@@ -75,13 +75,22 @@ export function run(program) {
                 accF32 = valF32;
                 break;
             case OP.STORE_B:
-                memU8[valU8] = accU8;
+                memU8[valI32] = accU8;
                 break;
             case OP.STORE_I:
                 memView.setInt32(valI32, accI32, true);
                 break;
             case OP.STORE_F:
-                memView.setFloat32(valF32, accF32, true);
+                memView.setFloat32(valI32, accF32, true);
+                break;
+            case OP.DEREF_B:
+                accU8 = memU8[valI32];
+                break;
+            case OP.DEREF_I:
+                accI32 = memView.getInt32(valI32, true);
+                break;
+            case OP.DEREF_F:
+                accF32 = memView.getFloat32(valI32, true);
                 break;
             case OP.ADD_B:
                 accU8 = (accU8 + valU8) & 0xFF;
@@ -91,6 +100,12 @@ export function run(program) {
                 break;
             case OP.ADD_F:
                 accU8 = (accF32 + valF32);
+                break;
+            case OP.SHL_B:
+                accU8 = (accU8 << valU8) & 0xFF;
+                break;
+            case OP.SHL_I:
+                accI32 = (accI32 << valI32) | 0;
                 break;
             case OP.OUT_B:
                 terminal.outU8(valU8);
