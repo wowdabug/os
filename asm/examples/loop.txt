@@ -3,12 +3,14 @@ load_i 0
 store i
 lbl l
 
-
+out_c 'a'
+out_c '\n'
 
 load @i
 add_i 1
 store i
-cmp_i 1000000
+cmp_i 10
 ifle
 jmp l
+flush
 halt

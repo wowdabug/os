@@ -67,15 +67,26 @@ function getOpcode(str, type) {
     return opcode;
 }
 
-// to be class-ified
-const globalFlags = {
-    float: false,
-    signed: false
+const PARSE_TYPE = {
+    NONE: 0,
+    NUM: 1,
+    VAR: 2,
+    CHAR: 3,
+    STR: 4
 };
 
+let floatFlag = false;
+let signedFlag = false;
+
+let staticPtr;
+const staticData = [];
+const staticSymbols = new Map();
+const staticStrs = new Map();
+const encoder = new TextEncoder();
+
 function parseNum(str) {
-    globalFlags.float = false;
-    globalFlags.signed = false;
+    floatFlag = false;
+    signedFlag = false;
     if (str === 'Infinity' || str === '-Infinity') {
         return null;
     } else {
@@ -85,7 +96,7 @@ function parseNum(str) {
             const char = str[i];
             const digit = isNumeric(char);
             if (char === '.') {
-                globalFlags.float = true;
+                floatFlag = true;
                 if (i !== 0 && (point || !prevDigit)) {
                     return null;
                 } else {
@@ -94,7 +105,7 @@ function parseNum(str) {
 
             } else if (!digit) {
                 if (i === 0 && str.length !== 1 && char === '-') {
-                    globalFlags.signed = true;
+                    signedFlag = true;
                 } else {
                     return null;
                 }
@@ -105,7 +116,7 @@ function parseNum(str) {
     }
 
     return {
-        type: 'num',
+        type: PARSE_TYPE.NUM,
         value: parseFloat(str),
     };
 }
@@ -124,7 +135,7 @@ function parseVar(str) {
     }
 
     return {
-        type: 'var',
+        type: PARSE_TYPE.VAR,
         value: str
     };
 }
@@ -158,7 +169,7 @@ function parseChar(str) {
     }
 
     return {
-        type: 'char',
+        type: PARSE_TYPE.CHAR,
         value: char
     };
 }
@@ -186,7 +197,7 @@ function parseStr(str) {
     }
 
     return {
-        type: 'str',
+        type: PARSE_TYPE.STR,
         value: substr
     };
 }
@@ -215,7 +226,9 @@ function getInsts(text) {
         let escape = false;
         for (let i = 0; i < instStr.length; ++i) {
             const char = instStr[i];
-            if (escape) {
+            if (!quote && char === '#') {
+                break;
+            } else if (escape) {
                 escape = false;
                 substr += char;
             } else if (quote && char === '\\') {
@@ -264,61 +277,72 @@ function getBytes(type, value) {
     return new Uint8Array(buffer);
 }
 
-// add some getters/setters
-class StaticAllocator {
-    ptr;
-    data = [];
-    encoder;
-    symbols;
-    strs;
-
-    constructor(offset) {
-        this.ptr = offset;
-        this.data = [];
-        this.encoder = new TextEncoder();
-        this.symbols = new Map();
-        this.strs = new Map();
+function alloc(bytes) {
+    if (staticPtr + bytes <= MEM.STATIC_REG_OFFSET + MEM.STATIC_REG_SIZE) {
+        console.log(`allocated ${bytes} byte${bytes == 1 ? "" : "s"} at address ${staticPtr}`);
+        staticPtr += bytes;
+    } else {
+        throw new Error("no static space");
     }
 
-    alloc(bytes) {
-        if (this.ptr + bytes <= MEM.STATIC_REG_OFFSET + MEM.STATIC_REG_SIZE) {
-            console.log(`allocated ${bytes} byte${bytes == 1 ? "" : "s"} at address ${this.ptr}`);
-            this.ptr += bytes;
-        } else {
-            throw new Error("no static space");
-        }
+    return staticPtr - bytes;
+}
 
-        return this.ptr - bytes;
-    }
+function allocVar(type) {
+    return alloc(TYPE_SIZES[type]);
+}
 
-    // seperate into alloc and create methods
-    allocVar(type, strs) {
-        const addr = this.alloc(TYPE_SIZES[type]);
-        this.data.push(getBytes(type, parseNum(strs[1] || 0).value), addr);
-        this.symbols.set(strs[0], {type: type, value: addr});
-    }
+function allocArr(type, size) {
+    return alloc(TYPE_SIZES[type] * size);
+}
 
-    allocArr(type, strs) {
-        const size = parseNum(strs[1]).value;
-        const addr = this.alloc(TYPE_SIZES[type] * size);
-        const bytes = [];
-        for (let i = 2; i < size + 2; ++i) { bytes.push(...getBytes(type, parseNum(strs[i] || 0).value)); }
+function allocChar() {
+    return alloc(1);
+}
+
+function allocStr(str) {
+    if (this.strs.has(str)) {
+        return this.strs.get(str);
+    } else {
+        const bytes = []
+        bytes.push(...this.encoder.encode(str), 0);
+        const addr = this.alloc(bytes.length);
         this.data.push(bytes, addr);
-        this.symbols.set(strs[0], addr);
+        this.strs.set(str, addr);
+        return addr;
+    }
+}
+
+function initVar(type, strs) {
+    const addr = allocVar(type);
+    const value = parseNum(strs[1] || 0).value;
+    staticData.push(getBytes(type, parseNum(strs[1] || 0).value), addr);
+    staticSymbols.set(strs[0], {type: type, value: addr});
+}
+
+function initArr(type, strs) {
+    const size = parseNum(strs[1]).value;
+    const addr = allocArr(type, size);
+    const bytes = [];
+    for (let i = 2; i < size + 2; ++i) { 
+        bytes.push(...getBytes(type, parseNum(strs[i] || 0).value)); 
     }
 
-    allocStr(str) {
-        if (this.strs.has(str)) {
-            return this.strs.get(str);
-        } else {
-            const bytes = []
-            bytes.push(...this.encoder.encode(str), 0);
-            const addr = this.alloc(bytes.length);
-            this.data.push(bytes, addr);
-            this.strs.set(str, addr);
-            return addr;
-        }
-    }
+    staticData.push(bytes, addr);
+    staticSymbols.set(strs[0], addr);
+}
+
+function initChar(strs) {
+    const char = parseChar(strs[1]).value.charCodeAt(0);
+    const addr = allocChar();
+    staticData.push([char], addr);
+    staticSymbols.set(strs[0], {type: TYPE.BYTE, value: addr});
+}
+
+function initStr(strs) {
+    const str = parseStr(strs[1]).value;
+    const addr = allocStr(str);
+    staticSymbols.set(strs[0], {type: TYPE.INT, value: addr});
 }
 
 export function compile(text) {
@@ -331,7 +355,7 @@ export function compile(text) {
     const tokensF32 = new Float32Array(tokens);
     const debugTokens = [];
 
-    const allocator = new StaticAllocator(MEM.STATIC_REG_OFFSET);
+    staticPtr = MEM.STATIC_REG_OFFSET;
 
     // refactor preprocessor
     let j = 0;
@@ -348,40 +372,36 @@ export function compile(text) {
             continue;
         }
 
+        // seperate init / alloc by type 
+        // allow chars in b and ba and strs in i and ia
+        // maybe? put all logic here or after other parsing
         switch (opcode) {
             case 'b':
-                allocator.allocVar(TYPE.BYTE, operands);
+                initVar(TYPE.BYTE, operands);
                 continue;
             case 'i':
-                allocator.allocVar(TYPE.INT, operands);
+                initVar(TYPE.INT, operands);
                 continue;
             case 'f':
-                allocator.allocVar(TYPE.FLOAT, operands);
+                initVar(TYPE.FLOAT, operands);
                 continue;
-            case 'c': {
-                const char = parseChar(operands[1]).value.charCodeAt(0);
-                const addr = allocator.alloc(1);
-                allocator.data.push([char], addr);
-                allocator.symbols.set(operands[0], {type: TYPE.BYTE, value: addr});
+            case 'c':
+                initChar(operands);
                 continue;
-            }
-            case 's': {
-                const str = parseStr(operands[1]).value;
-                const addr = allocator.allocStr(str);
-                allocator.symbols.set(operands[0], {type: TYPE.INT, value: addr});
+            case 's':
+                initStr(operands);
                 continue;
-            }
             case 'ba':
-                allocator.allocArr(TYPE.BYTE, operands);
+                initArr(TYPE.BYTE, operands);
                 continue;
             case 'ia':
-                allocator.allocArr(TYPE.INT, operands);
+                initArr(TYPE.INT, operands);
                 continue;
             case 'fa':
-                allocator.allocArr(TYPE.FLOAT, operands);
+                initArr(TYPE.FLOAT, operands);
                 continue;
             case 'lbl':
-                allocator.symbols.set(operands[0], {type: TYPE.INT, value: j - 1});
+                staticSymbols.set(operands[0], {type: TYPE.INT, value: j - 1});
                 continue;
             default:
                 ++j;
@@ -411,12 +431,12 @@ export function compile(text) {
                 throw new Error("operand invalid");
             }
 
-            if (parsed.type === 'num') {
+            if (parsed.type === PARSE_TYPE.NUM) {
                 let num = parsed.value;
                 const opcodeId = OP[opcode.toUpperCase()];
 
                 if (mode === MODE.DIR || OP_MODES[opcodeId] === MODE.DIR) {
-                    if (globalFlags.float || globalFlags.signed) {
+                    if (floatFlag || signedFlag) {
                         throw new Error('register must be unsigned int');
                     }
 
@@ -437,11 +457,11 @@ export function compile(text) {
                     }
                     
                     // add bound checking
-                    if (globalFlags.float) {
+                    if (floatFlag) {
                         type = TYPE.FLOAT;
                         tokensF32[operandOffset] = num;
                     } else {
-                        if (globalFlags.signed) {
+                        if (signedFlag) {
                             type = TYPE.INT;
                         }
                         
@@ -449,20 +469,20 @@ export function compile(text) {
                     }
                 }
 
-            } else if (parsed.type === 'var') {
-                if (!allocator.symbols.has(parsed.value)) {
+            } else if (parsed.type === PARSE_TYPE.VAR) {
+                if (!staticSymbols.has(parsed.value)) {
                     throw new Error("var not declared: " + parsed.value);
                 }
 
-                const data = allocator.symbols.get(parsed.value);
+                const data = staticSymbols.get(parsed.value);
                 type = data.type;
                 tokensI32[operandOffset] = data.value;
-            } else if (parsed.type === 'char') {
+            } else if (parsed.type === PARSE_TYPE.CHAR) {
                 type = TYPE.BYTE;
                 tokensI32[operandOffset] = parsed.value.charCodeAt(0);
-            } else if (parsed.type === 'str') { 
+            } else if (parsed.type === PARSE_TYPE.STR) { 
                 type = TYPE.INT;
-                const addr = allocator.allocStr(parsed.value);
+                const addr = allocStr(parsed.value);
                 tokensI32[operandOffset] = addr;
             }
         } else {
@@ -494,6 +514,6 @@ export function compile(text) {
 
     return {
         tokens: tokens,
-        data: allocator.data
+        data: staticData
     };
 }
