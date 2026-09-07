@@ -15,12 +15,17 @@ export function run(program) {
     const memU8 = new Uint8Array(mem);
     const memView = new DataView(mem);
 
+    let valU8 = 0;
+    let valI32 = 0;
+    let valF32 = 0;
+    let accU8 = 0;
+    let accI32 = 0;
+    let accF32 = 0;
+    let cmp = 0;
+
     for (let i = 0; i < data.length; i += 2) {
         memU8.set(data[i], data[i + 1]);
     }
-
-    let val;
-    let acc;
 
     const start = performance.now();
 
@@ -28,60 +33,118 @@ export function run(program) {
     main: while (i < MEM.MAX_INSTS) {
         // benchmark outside loop
         const base = i << 2;
-        const type = tokens[base + 1];
-        const operand = tokens[base + 3];
+        const type = tokensI32[base + 1];
+        const operand = tokensI32[base + 3];
 
-        // benchmark switch for immediates
         if (tokensI32[base] === MODE.IMM) {
-            val = operand;
-        } else {
-            switch (tokensI32[base + 1]) {
+            switch (type) {
                 case TYPE.BYTE:
-                    val = memU8[operand];
+                    valU8 = operand;
                     break;
                 case TYPE.INT:
-                    val = memView.getInt32(operand, true);
+                    valI32 = operand;
                     break;
                 case TYPE.FLOAT:
-                    val = memView.getFloat32(operand, true);
+                    valF32 = tokensF32[base + 3];
                     break;
-                default:
-                    val = 0;
+            }
+
+        } else {
+            switch (type) {
+                case TYPE.BYTE:
+                    valU8 = memU8[operand];
+                    break;
+                case TYPE.INT:
+                    valI32 = memView.getInt32(operand, true);
+                    break;
+                case TYPE.FLOAT:
+                    valF32 = memView.getFloat32(operand, true);
+                    break;
             }
         }
 
-        console.log(tokensI32[base + 2])
-
+        // optimize opcode count
         switch (tokensI32[base + 2]) {
             case OP.LOAD_B:
-                acc = val & 0xFF;
+                accU8 = valU8;
                 break;
             case OP.LOAD_I:
-                acc = val | 0;
+                accI32 = valI32;
                 break;
             case OP.LOAD_F:
-                acc = val;
+                accF32 = valF32;
                 break;
             case OP.STORE_B:
-                memU8[val | 0] = acc;
+                memU8[valU8] = accU8;
                 break;
             case OP.STORE_I:
-                acc = val | 0;
+                memView.setInt32(valI32, accI32, true);
                 break;
             case OP.STORE_F:
-                acc = val;
+                memView.setFloat32(valF32, accF32, true);
+                break;
+            case OP.ADD_B:
+                accU8 = (accU8 + valU8) & 0xFF;
+                break;
+            case OP.ADD_I:
+                accI32 = (accI32 + valI32) | 0;
+                break;
+            case OP.ADD_F:
+                accU8 = (accF32 + valF32);
                 break;
             case OP.OUT_B:
-                terminal.out(val & 0xFF);
+                terminal.outU8(valU8);
                 break;
             case OP.OUT_I:
-                terminal.out(val | 0);
+                terminal.outI32(valI32);
                 break;
             case OP.OUT_F:
-                terminal.out(val);
+                terminal.outF32(valF32);
+                break;
+            case OP.OUT_C:
+                terminal.outChar(valU8);
+                break;
+            case OP.OUT_S: {
+                let end = valI32;
+                while (memU8[end] !== 0) ++end;
+                terminal.outStr(memU8.subarray(valI32, end | 0));
+                break;
+            }
+            case OP.CMP_B:
+                cmp = (valU8 > accU8) - (valU8 < accU8);
+                break;
+            case OP.CMP_I:
+                cmp = (valI32 > accI32) - (valI32 < accI32);
+                break;
+            case OP.CMP_F:
+                cmp = (valF32 > accF32) - (valF32 < accF32);
+                break;
+            case OP.IFE:
+                if (cmp !== 0) ++i;
+                break;
+            case OP.IFNE:
+                if (cmp === 0) ++i;
+                break;
+            case OP.IFL:
+                if (cmp === -1) ++i;
+                break;
+            case OP.IFLE:
+                if (cmp !== 1) ++i;
+                break;
+            case OP.IFG:
+                if (cmp === 1) ++i;
+                break;
+            case OP.IFGE:
+                if (cmp !== -1) ++i;
+                break;
+            case OP.JMP:
+                i = valI32;
                 break;
             case OP.HALT:
                 break main;
+            case OP.FLUSH:
+                terminal.flush();
+                break;
             default:
                 throw new Error("opcode: " + tokensI32[base + 2]);
         }

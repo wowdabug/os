@@ -1,9 +1,14 @@
-i x
-i y
+i i
+load_i 0
+store i
+lbl l
 
-load_i 1
-store x
-load @x
-store y
 
+
+load @i
+add_i 1
+store i
+cmp_i 1000000
+ifle
+jmp l
 halt

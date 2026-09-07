@@ -86,22 +86,26 @@ export const OP = {
     OUT_F: 39,
     OUT_C: 40,
     OUT_S: 41,
-    JMP: 42,
-    IFE: 43,
-    IFNE: 44,
-    IFL: 45,
-    IFLE: 46,
-    IFG: 48,
-    IFGE: 49,
-    ALLOC: 50,
-    FREE: 51,
-    CAST_BI: 52,
-    CAST_BF: 53,
-    CAST_IB: 54,
-    CAST_IF: 55,
-    CAST_FB: 56,
-    CAST_FI: 57,
-    HALT: 58
+    CMP_B: 42,
+    CMP_I: 43,
+    CMP_F: 44,
+    IFE: 45,
+    IFNE: 46,
+    IFL: 47,
+    IFLE: 48,
+    IFG: 49,
+    IFGE: 50,
+    JMP: 51,
+    ALLOC: 52,
+    FREE: 53,
+    CAST_BI: 54,
+    CAST_BF: 55,
+    CAST_IB: 56,
+    CAST_IF: 57,
+    CAST_FB: 58,
+    CAST_FI: 59,
+    HALT: 60,
+    FLUSH: 61
 };
 
 export const OP_MODES = {
@@ -147,13 +151,16 @@ export const OP_MODES = {
     [OP.OUT_F]: MODE.IMM,
     [OP.OUT_C]: MODE.IMM,
     [OP.OUT_S]: MODE.IMM,
-    [OP.JMP]: MODE.IMM,
+    [OP.CMP_B]: MODE.IMM,
+    [OP.CMP_I]: MODE.IMM,
+    [OP.CMP_F]: MODE.IMM,
     [OP.IFE]: MODE.NONE,
     [OP.IFNE]: MODE.NONE,
     [OP.IFL]: MODE.NONE,
     [OP.IFLE]: MODE.NONE,
     [OP.IFG]: MODE.NONE,
     [OP.IFGE]: MODE.NONE,
+    [OP.JMP]: MODE.IMM,
     [OP.ALLOC]: MODE.IMM,
     [OP.FREE]: MODE.IMM,
     [OP.CAST_BI]: MODE.IMM,
@@ -162,7 +169,8 @@ export const OP_MODES = {
     [OP.CAST_IF]: MODE.IMM,
     [OP.CAST_FB]: MODE.IMM,
     [OP.CAST_FI]: MODE.IMM,
-    [OP.HALT]: MODE.NONE
+    [OP.HALT]: MODE.NONE,
+    [OP.FLUSH]: MODE.NONE
 };
 
 export const OP_TYPES = {
@@ -208,13 +216,16 @@ export const OP_TYPES = {
     [OP.OUT_F]: TYPE.FLOAT,
     [OP.OUT_C]: TYPE.BYTE,
     [OP.OUT_S]: TYPE.INT,
-    [OP.JMP]: TYPE.INT,
+    [OP.CMP_B]: TYPE.BYTE,
+    [OP.CMP_I]: TYPE.INT,
+    [OP.CMP_F]: TYPE.FLOAT,
     [OP.IFE]: TYPE.NONE,
     [OP.IFNE]: TYPE.NONE,
     [OP.IFL]: TYPE.NONE,
     [OP.IFLE]: TYPE.NONE,
     [OP.IFG]: TYPE.NONE,
     [OP.IFGE]: TYPE.NONE,
+    [OP.JMP]: TYPE.INT,
     [OP.ALLOC]: TYPE.INT,
     [OP.FREE]: TYPE.INT,
     [OP.CAST_BI]: TYPE.BYTE,
@@ -223,7 +234,8 @@ export const OP_TYPES = {
     [OP.CAST_IF]: TYPE.INT,
     [OP.CAST_FB]: TYPE.FLOAT,
     [OP.CAST_FI]: TYPE.FLOAT,
-    [OP.HALT]: TYPE.NONE
+    [OP.HALT]: TYPE.NONE,
+    [OP.FLUSH]: TYPE.NONE
 };
 
 export const asm = {

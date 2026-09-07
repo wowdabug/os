@@ -9,9 +9,6 @@ import {
     OP_TYPES 
 } from "./main.js";
 
-// IT WORKS IT WORKS IT WORKS
-// IF IT WORKS DON'T FIX IT
-
 function isLetter(char) {
     const code = char.charCodeAt(0);
     return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
@@ -55,6 +52,7 @@ function getOpcode(str, type) {
         case 'shl':
         case 'shr':
         case 'out':
+        case 'cmp':
             opcode = OP[str.toUpperCase() + TYPE_SUFFIXES[type]];
             break;
         default:
@@ -62,7 +60,6 @@ function getOpcode(str, type) {
             break;
     }
 
-    // I HATE YOUUU
     if (!opcode) {
         throw new Error("invalid opcode: " + str + ", " + type)
     }
@@ -267,6 +264,7 @@ function getBytes(type, value) {
     return new Uint8Array(buffer);
 }
 
+// add some getters/setters
 class StaticAllocator {
     ptr;
     data = [];
@@ -293,6 +291,7 @@ class StaticAllocator {
         return this.ptr - bytes;
     }
 
+    // seperate into alloc and create methods
     allocVar(type, strs) {
         const addr = this.alloc(TYPE_SIZES[type]);
         this.data.push(getBytes(type, parseNum(strs[1] || 0).value), addr);
@@ -313,7 +312,7 @@ class StaticAllocator {
             return this.strs.get(str);
         } else {
             const bytes = []
-            bytes.push(...encoder.encode(str), 0);
+            bytes.push(...this.encoder.encode(str), 0);
             const addr = this.alloc(bytes.length);
             this.data.push(bytes, addr);
             this.strs.set(str, addr);
@@ -363,13 +362,13 @@ export function compile(text) {
                 const char = parseChar(operands[1]).value.charCodeAt(0);
                 const addr = allocator.alloc(1);
                 allocator.data.push([char], addr);
-                symbolTable.set(operands[0], {type: TYPE.BYTE, value: addr});
+                allocator.symbols.set(operands[0], {type: TYPE.BYTE, value: addr});
                 continue;
             }
             case 's': {
                 const str = parseStr(operands[1]).value;
                 const addr = allocator.allocStr(str);
-                symbolTable.set(operands[0], {type: TYPE.INT, value: addr});
+                allocator.symbols.set(operands[0], {type: TYPE.INT, value: addr});
                 continue;
             }
             case 'ba':
@@ -382,7 +381,7 @@ export function compile(text) {
                 allocator.allocArr(TYPE.FLOAT, operands);
                 continue;
             case 'lbl':
-                symbolTable.set(operands[0], {type: TYPE.INT, value: j - 1});
+                allocator.symbols.set(operands[0], {type: TYPE.INT, value: j - 1});
                 continue;
             default:
                 ++j;
@@ -452,7 +451,7 @@ export function compile(text) {
 
             } else if (parsed.type === 'var') {
                 if (!allocator.symbols.has(parsed.value)) {
-                    throw new Error("var not declared");
+                    throw new Error("var not declared: " + parsed.value);
                 }
 
                 const data = allocator.symbols.get(parsed.value);
@@ -463,7 +462,7 @@ export function compile(text) {
                 tokensI32[operandOffset] = parsed.value.charCodeAt(0);
             } else if (parsed.type === 'str') { 
                 type = TYPE.INT;
-                const addr = staticStr(parsed.value);
+                const addr = allocator.allocStr(parsed.value);
                 tokensI32[operandOffset] = addr;
             }
         } else {
@@ -490,6 +489,7 @@ export function compile(text) {
         debugTokens.push([tokensI32[modeOffset], tokensI32[typeOffset], opcode, tokensI32[opcodeOffset], operand, tokensI32[operandOffset]]);
     }
 
+    console.log(debugTokens);
     console.log(performance.now() - start + ' ms');
 
     return {
