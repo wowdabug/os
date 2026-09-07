@@ -43,30 +43,13 @@ function isAlphanumeric(char) {
 }
 
 function getOpcode(str, type) {
+    const baseOpcodes = ['load', 'store', 'deref', 'add', 'sub', 'mul', 'div', 'mod', 'and', 'or', 'xor', 'not', 'shl', 'shr', 'out', 'in', 'cmp'];
     let opcode;
 
-    switch (str) {
-        case 'load':
-        case 'store':
-        case 'deref':
-        case 'add':
-        case 'sub':
-        case 'mul':
-        case 'div':
-        case 'mod':
-        case 'and':
-        case 'or':
-        case 'xor':
-        case 'not':
-        case 'shl':
-        case 'shr':
-        case 'out':
-        case 'cmp':
-            opcode = OP[str.toUpperCase() + TYPE_SUFFIXES[type]];
-            break;
-        default:
-            opcode = OP[str.toUpperCase()];
-            break;
+    if (baseOpcodes.includes(str)) {
+        opcode = OP[str.toUpperCase() + TYPE_SUFFIXES[type]];
+    } else {
+        opcode = OP[str.toUpperCase()];
     }
 
     if (!opcode) {
@@ -303,7 +286,7 @@ function allocStr(str) {
 function initVar(type, strs) {
     const addr = allocVar(type);
     staticData.push(getBytes(type, parseNum(strs[1] || 0, "invalid")), addr);
-    staticSymbols.set(strs[0], { type: type, value: addr });
+    staticSymbols.set(strs[0], { type: type, val: addr });
 }
 
 function initArr(type, strs) {
@@ -315,21 +298,27 @@ function initArr(type, strs) {
     }
 
     staticData.push(bytes, addr);
-    staticSymbols.set(strs[0], { type: type, value: addr });
+    staticSymbols.set(strs[0], { type: type, val: addr });
 }
 
-function initChar(strs) {
-    const char = parseChar(strs[1]).charCodeAt(0);
-    const addr = allocChar();
-    staticData.push([char], addr);
-    staticSymbols.set(strs[0], { type: TYPE.BYTE, value: addr });
-}
+// static data?
+const behaviors = {
+    b(vals) { staticSymbols.set(vals[0], { type: TYPE.BYTE, val: vals[1] }); },
+    i(vals) { staticSymbols.set(vals[0], { type: TYPE.INT, val: vals[1] }); },
+    f(vals) { staticSymbols.set(vals[0], { type: TYPE.FLOAT, val: vals[1] }); },
+    ba() {
 
-function initStr(strs) {
-    const str = parseStr(strs[1]);
-    const addr = allocStr(str);
-    staticSymbols.set(strs[0], { type: TYPE.INT, value: addr });
-}
+    },
+    ia() {
+
+    },
+    fa() {
+
+    },
+    lbl() {
+
+    }
+};
 
 export function compile(text) {
     const start = performance.now();
@@ -354,53 +343,24 @@ export function compile(text) {
 
         const [opcode, ...operands] = insts[i];
 
+        // is this needed?
         if (!opcode) {
             continue;
         }
 
-        // seperate init / alloc by type 
-        // allow chars in b and ba and strs in i and ia
-        // maybe? put all logic here or after other parsing
-        switch (opcode) {
-            case 'b':
-                initVar(TYPE.BYTE, operands);
-                continue;
-            case 'i':
-                initVar(TYPE.INT, operands);
-                continue;
-            case 'f':
-                initVar(TYPE.FLOAT, operands);
-                continue;
-            case 'c':
-                initChar(operands);
-                continue;
-            case 's':
-                initStr(operands);
-                continue;
-            case 'ba':
-                initArr(TYPE.BYTE, operands);
-                continue;
-            case 'ia':
-                initArr(TYPE.INT, operands);
-                continue;
-            case 'fa':
-                initArr(TYPE.FLOAT, operands);
-                continue;
-            case 'lbl':
-                staticSymbols.set(operands[0], { type: TYPE.INT, value: j - 1 });
-                continue;
-            default:
-                ++j;
-                break;
-        }
-
-        let operand = operands[0];
-
         let mode = MODE.NONE;
         let type = TYPE.NONE;
 
-        if (operand) {
+        const preprocessor = Object.hasOwn(behaviors, opcode);
+
+        const vals = [];
+        for (let i = 0; i < operands.length; ++i) {
+            const operand = operands[i];
             if (operand[0] === '@') {
+                if (preprocessor) {
+                    throw new Error('preprocessor vals cannot be direct');
+                }
+
                 mode = MODE.DIR;
                 operand = operand.slice(1);
             } else {
@@ -427,7 +387,7 @@ export function compile(text) {
                     }
 
                     num += MEM.USER_REG_OFFSET;
-                    tokensI32[operandOffset] = num;
+                    vals.push(num);
                 } else {
                     if (opcode === 'store' || opcode === 'deref') {
                         throw new Error('type not provided');
@@ -436,37 +396,54 @@ export function compile(text) {
                     // add bound checking for u8 and i32
                     if (flagFloat) {
                         type = TYPE.FLOAT;
-                        tokensF32[operandOffset] = num;
+                        vals.push(num);
                     } else {
                         if (flagSigned) {
                             type = TYPE.INT;
                         }
                         
-                        tokensI32[operandOffset] = num;
+                        vals.push(num);
                     }
                 }
 
             } else if (parsed = parseVar(operand)) {
+                if (preprocessor) {
+                    type = TYPE.NONE;
+                    vals.push(parsed);
+                    continue;
+                }
+
                 if (!staticSymbols.has(parsed)) {
                     throw new Error('var not declared: ' + parsed);
                 }
 
                 const data = staticSymbols.get(parsed);
                 type = data.type;
-                tokensI32[operandOffset] = data.value;
+                vals.push(data.val);
             } else if (parsed = parseChar(operand)) {
                 type = TYPE.BYTE;
-                tokensI32[operandOffset] = parsed.charCodeAt(0);
+                vals.push(parsed.charCodeAt(0));
             } else if (parsed = parseStr(operand)) { 
                 type = TYPE.INT;
                 const addr = allocStr(parsed);
-                tokensI32[operandOffset] = addr;
+                vals.push(addr);
             } else {
                 throw new Error('operand invalid');
             }
 
+        }
+
+        if (preprocessor) {
+            behaviors[opcode](vals);
+            continue;
         } else {
-            tokensI32[operandOffset] = 0;
+            ++j;
+        }
+
+        if (type === TYPE.FLOAT) {
+            tokensF32[operandOffset] = vals[0];
+        } else {
+            tokensI32[operandOffset] = vals[0];
         }
 
         const opcodeId = getOpcode(opcode, type);
@@ -481,12 +458,12 @@ export function compile(text) {
             throw new Error('mismatched types: ' + opcodeType + ', ' + type);
         }
 
-        tokensI32[opcodeOffset] = opcodeId;
-
         tokensI32[modeOffset] = mode;
         tokensI32[typeOffset] = type;
+
+        tokensI32[opcodeOffset] = opcodeId;
         
-        debugTokens.push([tokensI32[modeOffset], tokensI32[typeOffset], opcode, tokensI32[opcodeOffset], operand, tokensI32[operandOffset]]);
+        debugTokens.push([tokensI32[modeOffset], tokensI32[typeOffset], opcode, tokensI32[opcodeOffset], operands[0], tokensI32[operandOffset]]);
     }
 
     console.log(debugTokens);

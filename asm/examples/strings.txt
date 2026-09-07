@@ -1,15 +1,7 @@
-s str "Hello, world!"
-s escapes "a\'b\"c\\d\ne\tf\0g"
-
-c nl '\n'
+i str "Hello, world!"
 
 out_s str
-out_c @nl
-
-out_s escapes
-out_c @nl
-
-out_i @"test"
+out_c '\n'
 
 flush
 
