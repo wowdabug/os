@@ -258,18 +258,6 @@ function alloc(bytes) {
     return staticPtr - bytes;
 }
 
-function allocVar(type) {
-    return alloc(TYPE_SIZES[type]);
-}
-
-function allocArr(type, size) {
-    return alloc(TYPE_SIZES[type] * size);
-}
-
-function allocChar() {
-    return alloc(1);
-}
-
 function allocStr(str) {
     if (staticStrs.has(str)) {
         return staticStrs.get(str);
@@ -283,40 +271,73 @@ function allocStr(str) {
     }
 }
 
-function initVar(type, strs) {
-    const addr = allocVar(type);
-    staticData.push(getBytes(type, parseNum(strs[1] || 0, "invalid")), addr);
-    staticSymbols.set(strs[0], { type: type, val: addr });
-}
-
-function initArr(type, strs) {
-    const size = parseNum(strs[1]);
-    const addr = allocArr(type, size);
-    const bytes = [];
-    for (let i = 2; i < size + 2; ++i) { 
-        bytes.push(...getBytes(type, parseNum(strs[i] || 0))); 
+/*
+    function initVar(type, strs) {
+        const addr = alloc(TYPE_SIZES[type]);
+        staticData.push(getBytes(type, parseNum(strs[1] || 0, "invalid")), addr);
+        staticSymbols.set(strs[0], { type: type, val: addr });
     }
 
-    staticData.push(bytes, addr);
-    staticSymbols.set(strs[0], { type: type, val: addr });
-}
+    function initArr(type, strs) {
+        const size = parseNum(strs[1]);
+        const addr = alloc(TYPE_SIZES[type] * size);
+        const bytes = [];
+        for (let i = 2; i < size + 2; ++i) { 
+            bytes.push(...getBytes(type, parseNum(strs[i] || 0))); 
+        }
 
-// static data?
+        staticData.push(bytes, addr);
+        staticSymbols.set(strs[0], { type: type, val: addr });
+    }
+*/
+
+// ensure type
 const behaviors = {
-    b(vals) { staticSymbols.set(vals[0], { type: TYPE.BYTE, val: vals[1] }); },
-    i(vals) { staticSymbols.set(vals[0], { type: TYPE.INT, val: vals[1] }); },
-    f(vals) { staticSymbols.set(vals[0], { type: TYPE.FLOAT, val: vals[1] }); },
+    b(vals) {
+        const addr = alloc(1);
+        staticData.push(vals[1] || 0, addr);
+        staticSymbols.set(vals[0], { type: TYPE.BYTE, val: addr }); 
+    },
+
+    i(vals) { 
+        if (vals.length === 0) {
+            throw new Error('not enough args');
+        }
+
+        const addr = alloc(4);
+        console.log(vals[1])
+        staticData.push(getBytes(TYPE.INT, vals[1] || 0), addr);
+        staticSymbols.set(vals[0], { type: TYPE.INT, val: addr }); 
+    },
+
+    f(vals) {
+        const addr = alloc(4);
+        staticData.push(getBytes(TYPE.FLOAT, vals[1] || 0), addr);
+        staticSymbols.set(vals[0], { type: TYPE.FLOAT, val: addr }); 
+    },
+
+    c(vals) { 
+        staticSymbols.set(vals[0], { type: TYPE.BYTE, val: vals[1] || 0 }); 
+    },
+
+    s(vals) {
+        staticSymbols.set(vals[0], { type: TYPE.INT, val: vals[1] || 0 }); 
+    },
+
     ba() {
 
     },
+
     ia() {
 
     },
+
     fa() {
 
     },
-    lbl() {
 
+    lbl() {
+        staticSymbols.set(vals[0], { type: TYPE.INT, value: j - 1 });
     }
 };
 
@@ -355,7 +376,7 @@ export function compile(text) {
 
         const vals = [];
         for (let i = 0; i < operands.length; ++i) {
-            const operand = operands[i];
+            let operand = operands[i];
             if (operand[0] === '@') {
                 if (preprocessor) {
                     throw new Error('preprocessor vals cannot be direct');

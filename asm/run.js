@@ -119,12 +119,11 @@ export function run(program) {
             case OP.OUT_C:
                 terminal.outChar(valU8);
                 break;
-            case OP.OUT_S: {
+            case OP.OUT_S:
                 let end = valI32;
                 while (memU8[end] !== 0) ++end;
                 terminal.outStr(memU8.subarray(valI32, end | 0));
                 break;
-            }
             case OP.CMP_B:
                 cmp = (valU8 > accU8) - (valU8 < accU8);
                 break;

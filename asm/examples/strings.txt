@@ -1,7 +1,20 @@
-i str "Hello, world!"
+s str "Hello, world!"
+i str2 "helo world"
+
+out_i @str2
+out_c '\n'
+
+out_s @str2
+out_c '\n'
 
 out_s str
 out_c '\n'
+
+i x 1
+out_i @x
+out_c '\n'
+
+b a "lol"
 
 flush
 
