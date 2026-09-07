@@ -9,6 +9,8 @@ out_c @nl
 out_s escapes
 out_c @nl
 
+out_i @"test"
+
 flush
 
 halt

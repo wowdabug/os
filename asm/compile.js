@@ -9,6 +9,24 @@ import {
     OP_TYPES 
 } from './main.js';
 
+const ESCAPES = {
+    '\'': '\'',
+    '"': '"',
+    '\\': '\\',
+    'n': String.fromCharCode(10),
+    't': String.fromCharCode(9),
+    '0': String.fromCharCode(0)
+};
+
+let flagFloat = false;
+let flagSigned = false;
+
+let staticPtr = null;
+const staticData = [];
+const staticSymbols = new Map();
+const staticStrs = new Map();
+const staticEncoder = new TextEncoder();
+
 function isLetter(char) {
     const code = char.charCodeAt(0);
     return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
@@ -23,15 +41,6 @@ function isAlphanumeric(char) {
     const code = char.charCodeAt(0);
     return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
 }
-
-const ESCAPES = {
-    '\'': '\'',
-    '"': '"',
-    '\\': '\\',
-    'n': String.fromCharCode(10),
-    't': String.fromCharCode(9),
-    '0': String.fromCharCode(0)
-};
 
 function getOpcode(str, type) {
     let opcode;
@@ -67,26 +76,9 @@ function getOpcode(str, type) {
     return opcode;
 }
 
-const PARSE_TYPE = {
-    NONE: 0,
-    NUM: 1,
-    VAR: 2,
-    CHAR: 3,
-    STR: 4
-};
-
-let floatFlag = false;
-let signedFlag = false;
-
-let staticPtr;
-const staticData = [];
-const staticSymbols = new Map();
-const staticStrs = new Map();
-const encoder = new TextEncoder();
-
-function parseNum(str) {
-    floatFlag = false;
-    signedFlag = false;
+function parseNum(str, err) {
+    flagFloat = false;
+    flagSigned = false;
     if (str === 'Infinity' || str === '-Infinity') {
         return null;
     } else {
@@ -96,8 +88,9 @@ function parseNum(str) {
             const char = str[i];
             const digit = isNumeric(char);
             if (char === '.') {
-                floatFlag = true;
+                flagFloat = true;
                 if (i !== 0 && (point || !prevDigit)) {
+                    if (err) { throw new Error(err); }
                     return null;
                 } else {
                     point = true;
@@ -105,8 +98,9 @@ function parseNum(str) {
 
             } else if (!digit) {
                 if (i === 0 && str.length !== 1 && char === '-') {
-                    signedFlag = true;
+                    flagSigned = true;
                 } else {
+                    if (err) { throw new Error(err); }
                     return null;
                 }
             }
@@ -115,32 +109,25 @@ function parseNum(str) {
         }
     }
 
-    return {
-        type: PARSE_TYPE.NUM,
-        value: parseFloat(str),
-    };
+    return parseFloat(str);
 }
 
 // to be optimized
-function parseVar(str) {
+function parseVar(str, err) {
     for (let i = 0; i < str.length; ++i) {
         const char = str[i]; 
-        if (i === 0 && !(isLetter(char) || char === '_')) {
-            return null;
-        }
-
-        if (!(isAlphanumeric(char) || char === '_')) {
+        if (!isAlphanumeric(char) && char !== '_' ||
+            i === 0 && !isLetter(char) && char !== '_'
+        ) {
+            if (err) { throw new Error(err); }
             return null;
         }
     }
 
-    return {
-        type: PARSE_TYPE.VAR,
-        value: str
-    };
+    return str;
 }
 
-function parseChar(str) {
+function parseChar(str, err) {
     let char;
 
     if (str[0] !== '\'' || str[str.length - 1] !== '\'') {
@@ -149,33 +136,35 @@ function parseChar(str) {
 
     if (str.length === 3) {
         if (str[1] === '\\') {
+            if (err) { throw new Error(err); }
             return null;
         }
 
         char = str[1];
     } else if (str.length === 4) {
         if (str[1] !== '\\') {
+            if (err) { throw new Error(err); }
             return null;
         }
 
         const escape = ESCAPES[str[2]];
         if (!escape) {
+            if (err) { throw new Error(err); }
             return null;
         }
 
         char = escape;
     } else {
+        if (err) { throw new Error(err); }
         return null;
     }
 
-    return {
-        type: PARSE_TYPE.CHAR,
-        value: char
-    };
+    return char;
 }
 
-function parseStr(str) {
+function parseStr(str, err) {
     if (str[0] !== '"' || str[str.length - 1] !== '"') {
+        if (err) { throw new Error(err); }
         return null;
     }
 
@@ -184,7 +173,7 @@ function parseStr(str) {
     for (let i = 1; i < str.length - 1; ++i) {
         if (escape) {
             escape = false;
-            substr += ESCAPES[str[i]];
+            substr += ESCAPES[str[i]]; // add error here?
         } else if (str[i] == '\\') {
             escape = true;
         } else {
@@ -193,13 +182,11 @@ function parseStr(str) {
     }
 
     if (escape) {
+        if (err) { throw new Error(err); }
         return null;
     }
 
-    return {
-        type: PARSE_TYPE.STR,
-        value: substr
-    };
+    return substr;
 }
 
 function getInsts(text) {
@@ -305,7 +292,7 @@ function allocStr(str) {
         return staticStrs.get(str);
     } else {
         const bytes = []
-        bytes.push(...encoder.encode(str), 0);
+        bytes.push(...staticEncoder.encode(str), 0);
         const addr = alloc(bytes.length);
         staticData.push(bytes, addr);
         staticStrs.set(str, addr);
@@ -315,33 +302,33 @@ function allocStr(str) {
 
 function initVar(type, strs) {
     const addr = allocVar(type);
-    staticData.push(getBytes(type, parseNum(strs[1] || 0).value), addr);
-    staticSymbols.set(strs[0], {type: type, value: addr});
+    staticData.push(getBytes(type, parseNum(strs[1] || 0, "invalid")), addr);
+    staticSymbols.set(strs[0], { type: type, value: addr });
 }
 
 function initArr(type, strs) {
-    const size = parseNum(strs[1]).value;
+    const size = parseNum(strs[1]);
     const addr = allocArr(type, size);
     const bytes = [];
     for (let i = 2; i < size + 2; ++i) { 
-        bytes.push(...getBytes(type, parseNum(strs[i] || 0).value)); 
+        bytes.push(...getBytes(type, parseNum(strs[i] || 0))); 
     }
 
     staticData.push(bytes, addr);
-    staticSymbols.set(strs[0], {type: type, value: addr});
+    staticSymbols.set(strs[0], { type: type, value: addr });
 }
 
 function initChar(strs) {
-    const char = parseChar(strs[1]).value.charCodeAt(0);
+    const char = parseChar(strs[1]).charCodeAt(0);
     const addr = allocChar();
     staticData.push([char], addr);
-    staticSymbols.set(strs[0], {type: TYPE.BYTE, value: addr});
+    staticSymbols.set(strs[0], { type: TYPE.BYTE, value: addr });
 }
 
 function initStr(strs) {
-    const str = parseStr(strs[1]).value;
+    const str = parseStr(strs[1]);
     const addr = allocStr(str);
-    staticSymbols.set(strs[0], {type: TYPE.INT, value: addr});
+    staticSymbols.set(strs[0], { type: TYPE.INT, value: addr });
 }
 
 export function compile(text) {
@@ -400,7 +387,7 @@ export function compile(text) {
                 initArr(TYPE.FLOAT, operands);
                 continue;
             case 'lbl':
-                staticSymbols.set(operands[0], {type: TYPE.INT, value: j - 1});
+                staticSymbols.set(operands[0], { type: TYPE.INT, value: j - 1 });
                 continue;
             default:
                 ++j;
@@ -420,22 +407,13 @@ export function compile(text) {
                 mode = MODE.IMM;
             }
 
-            let parsed = 
-                parseNum(operand) ??
-                parseVar(operand) ??
-                parseChar(operand) ??
-                parseStr(operand);
-
-            if (!parsed) {
-                throw new Error('operand invalid');
-            }
-
-            if (parsed.type === PARSE_TYPE.NUM) {
-                let num = parsed.value;
+            let parsed;
+            if (parsed = parseNum(operand)) {
+                let num = parsed;
                 const opcodeId = OP[opcode.toUpperCase()];
 
                 if (mode === MODE.DIR || OP_MODES[opcodeId] === MODE.DIR) {
-                    if (floatFlag || signedFlag) {
+                    if (flagFloat || flagSigned) {
                         throw new Error('register must be unsigned int');
                     }
 
@@ -455,12 +433,12 @@ export function compile(text) {
                         throw new Error('type not provided');
                     }
                     
-                    // add bound checking
-                    if (floatFlag) {
+                    // add bound checking for u8 and i32
+                    if (flagFloat) {
                         type = TYPE.FLOAT;
                         tokensF32[operandOffset] = num;
                     } else {
-                        if (signedFlag) {
+                        if (flagSigned) {
                             type = TYPE.INT;
                         }
                         
@@ -468,22 +446,25 @@ export function compile(text) {
                     }
                 }
 
-            } else if (parsed.type === PARSE_TYPE.VAR) {
-                if (!staticSymbols.has(parsed.value)) {
-                    throw new Error('var not declared: ' + parsed.value);
+            } else if (parsed = parseVar(operand)) {
+                if (!staticSymbols.has(parsed)) {
+                    throw new Error('var not declared: ' + parsed);
                 }
 
-                const data = staticSymbols.get(parsed.value);
+                const data = staticSymbols.get(parsed);
                 type = data.type;
                 tokensI32[operandOffset] = data.value;
-            } else if (parsed.type === PARSE_TYPE.CHAR) {
+            } else if (parsed = parseChar(operand)) {
                 type = TYPE.BYTE;
-                tokensI32[operandOffset] = parsed.value.charCodeAt(0);
-            } else if (parsed.type === PARSE_TYPE.STR) { 
+                tokensI32[operandOffset] = parsed.charCodeAt(0);
+            } else if (parsed = parseStr(operand)) { 
                 type = TYPE.INT;
-                const addr = allocStr(parsed.value);
+                const addr = allocStr(parsed);
                 tokensI32[operandOffset] = addr;
+            } else {
+                throw new Error('operand invalid');
             }
+
         } else {
             tokensI32[operandOffset] = 0;
         }
