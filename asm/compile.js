@@ -271,75 +271,79 @@ function allocStr(str) {
     }
 }
 
-/*
-    function initVar(type, strs) {
-        const addr = alloc(TYPE_SIZES[type]);
-        staticData.push(getBytes(type, parseNum(strs[1] || 0, "invalid")), addr);
-        staticSymbols.set(strs[0], { type: type, val: addr });
+function initVar(type, types, vals) {
+    if (vals.length === 0) { throw new Error('not enough args'); }
+    if ((type === TYPE.BYTE || type === TYPE.INT) && types[1] === TYPE.FLOAT) { throw new Error('invalid type'); }
+    const val = vals[1] || 0;
+    ensureRange(type, val);
+    const addr = alloc(TYPE_SIZES[type]);
+    staticData.push(getBytes(type, val), addr);
+    staticSymbols.set(vals[0], { type: type, val: addr }); 
+}
+
+function initArr(type, types, vals) {
+    if (vals.length < 2) { throw new Error('not enough args'); }
+    const size = vals[1];
+    if (types[1] === TYPE.FLOAT) { throw new Error('invalid size type'); }
+    ensureRange(TYPE.INT, size);
+    const addr = alloc(TYPE_SIZES[type] * size);
+    const bytes = [];
+    for (let i = 2; i < size + 2; ++i) { 
+        if ((type === TYPE.BYTE || type === TYPE.INT) && types[1] === TYPE.FLOAT) { throw new Error('invalid type'); }
+        const val = vals[i] || 0;
+        ensureRange(type, val);
+        bytes.push(...getBytes(type, val)); 
     }
 
-    function initArr(type, strs) {
-        const size = parseNum(strs[1]);
-        const addr = alloc(TYPE_SIZES[type] * size);
-        const bytes = [];
-        for (let i = 2; i < size + 2; ++i) { 
-            bytes.push(...getBytes(type, parseNum(strs[i] || 0))); 
-        }
+    staticData.push(bytes, addr);
+    staticSymbols.set(vals[0], { type: type, val: addr }); 
+}
 
-        staticData.push(bytes, addr);
-        staticSymbols.set(strs[0], { type: type, val: addr });
-    }
-*/
-
-// ensure type
+// to be refactored
+// maybe put in main compile loop?
 const behaviors = {
-    b(vals) {
-        const addr = alloc(1);
-        staticData.push(vals[1] || 0, addr);
-        staticSymbols.set(vals[0], { type: TYPE.BYTE, val: addr }); 
+    b(types, vals) { initVar(TYPE.BYTE, types, vals); },
+    i(types, vals) { initVar(TYPE.INT, types, vals); },
+    f(types, vals) { initVar(TYPE.FLOAT, types, vals); },
+
+    c(types, vals) { 
+        if (vals.length < 2) { throw new Error('not enough args'); }
+        if (types[1] === TYPE.FLOAT) { throw new Error('invalid type'); }
+        const val = vals[1];
+        ensureRange(TYPE.BYTE, val);
+        staticSymbols.set(vals[0], { type: TYPE.BYTE, val: val }); 
     },
 
-    i(vals) { 
-        if (vals.length === 0) {
-            throw new Error('not enough args');
-        }
-
-        const addr = alloc(4);
-        console.log(vals[1])
-        staticData.push(getBytes(TYPE.INT, vals[1] || 0), addr);
-        staticSymbols.set(vals[0], { type: TYPE.INT, val: addr }); 
+    s(types, vals) {
+        if (vals.length < 2) { throw new Error('not enough args'); }
+        if (types[1] === TYPE.FLOAT) { throw new Error('invalid type'); }
+        const val = vals[1];
+        ensureRange(TYPE.INT, val);
+        staticSymbols.set(vals[0], { type: TYPE.INT, val: val }); 
     },
 
-    f(vals) {
-        const addr = alloc(4);
-        staticData.push(getBytes(TYPE.FLOAT, vals[1] || 0), addr);
-        staticSymbols.set(vals[0], { type: TYPE.FLOAT, val: addr }); 
-    },
+    ba(types, vals) { initArr(TYPE.BYTE, types, vals); },
+    ia(types, vals) { initArr(TYPE.INT, types, vals); },
+    fa(types, vals) { initArr(TYPE.FLOAT, types, vals); },
 
-    c(vals) { 
-        staticSymbols.set(vals[0], { type: TYPE.BYTE, val: vals[1] || 0 }); 
-    },
-
-    s(vals) {
-        staticSymbols.set(vals[0], { type: TYPE.INT, val: vals[1] || 0 }); 
-    },
-
-    ba() {
-
-    },
-
-    ia() {
-
-    },
-
-    fa() {
-
-    },
-
-    lbl() {
-        staticSymbols.set(vals[0], { type: TYPE.INT, value: j - 1 });
+    lbl(types, vals, i) {
+        staticSymbols.set(vals[0], { type: TYPE.INT, value: i - 1 });
     }
 };
+
+function ensureRange(type, val) {
+    switch (type) {
+        case TYPE.BYTE:
+            if (val < -256 || val >= 256) { throw new Error('byte out of range'); }
+            break;
+        case TYPE.INT:
+            if (val < -2147483648 || val >= 2147483648) { throw new Error('int out of range'); }
+            break;
+        case TYPE.FLOAT:
+            if (!Number.isFinite(Math.fround(num))) { throw new Error(`float out of range`); }
+            break;
+    }
+}
 
 export function compile(text) {
     const start = performance.now();
@@ -353,7 +357,6 @@ export function compile(text) {
 
     staticPtr = MEM.STATIC_REG_OFFSET;
 
-    // refactor preprocessor
     let j = 0;
     for (let i = 0; i < insts.length; ++i) {
         const base = j * 4;
@@ -364,17 +367,16 @@ export function compile(text) {
 
         const [opcode, ...operands] = insts[i];
 
-        // is this needed?
         if (!opcode) {
             continue;
         }
-
-        let mode = MODE.NONE;
-        let type = TYPE.NONE;
-
+        
         const preprocessor = Object.hasOwn(behaviors, opcode);
 
+        let mode = MODE.NONE;
+
         const vals = [];
+        const types = [];
         for (let i = 0; i < operands.length; ++i) {
             let operand = operands[i];
             if (operand[0] === '@') {
@@ -389,7 +391,7 @@ export function compile(text) {
             }
 
             let parsed;
-            if (parsed = parseNum(operand)) {
+            if ((parsed = parseNum(operand)) !== null) {
                 let num = parsed;
                 const opcodeId = OP[opcode.toUpperCase()];
 
@@ -408,6 +410,7 @@ export function compile(text) {
                     }
 
                     num += MEM.USER_REG_OFFSET;
+                    types.push(TYPE.INT);
                     vals.push(num);
                 } else {
                     if (opcode === 'store' || opcode === 'deref') {
@@ -416,20 +419,22 @@ export function compile(text) {
                     
                     // add bound checking for u8 and i32
                     if (flagFloat) {
-                        type = TYPE.FLOAT;
+                        types.push(TYPE.FLOAT);
                         vals.push(num);
                     } else {
                         if (flagSigned) {
-                            type = TYPE.INT;
+                            types.push(TYPE.INT);
+                        } else {
+                            types.push(TYPE.NONE);
                         }
                         
                         vals.push(num);
                     }
                 }
 
-            } else if (parsed = parseVar(operand)) {
+            } else if ((parsed = parseVar(operand)) !== null) {
                 if (preprocessor) {
-                    type = TYPE.NONE;
+                    types.push(TYPE.NONE);
                     vals.push(parsed);
                     continue;
                 }
@@ -439,33 +444,31 @@ export function compile(text) {
                 }
 
                 const data = staticSymbols.get(parsed);
-                type = data.type;
+                types.push(data.type);
                 vals.push(data.val);
-            } else if (parsed = parseChar(operand)) {
-                type = TYPE.BYTE;
+            } else if ((parsed = parseChar(operand)) !== null) {
+                types.push(TYPE.BYTE);
                 vals.push(parsed.charCodeAt(0));
-            } else if (parsed = parseStr(operand)) { 
-                type = TYPE.INT;
+            } else if ((parsed = parseStr(operand)) !== null) { 
                 const addr = allocStr(parsed);
+                types.push(TYPE.INT);
                 vals.push(addr);
             } else {
-                throw new Error('operand invalid');
+                throw new Error('operand invalid: ' + operand);
             }
 
         }
 
         if (preprocessor) {
-            behaviors[opcode](vals);
+            if (typeof vals[0] !== 'string') { throw new Error('invalid symbol'); }
+            behaviors[opcode](types, vals, j);
             continue;
         } else {
             ++j;
         }
 
-        if (type === TYPE.FLOAT) {
-            tokensF32[operandOffset] = vals[0];
-        } else {
-            tokensI32[operandOffset] = vals[0];
-        }
+        let type = types[0];
+        let val = vals[0];
 
         const opcodeId = getOpcode(opcode, type);
         if (!opcodeId) {
@@ -477,6 +480,14 @@ export function compile(text) {
             type = opcodeType;
         } else if (opcodeType != type) {
             throw new Error('mismatched types: ' + opcodeType + ', ' + type);
+        }
+
+        ensureRange(type, val);
+
+        if (type === TYPE.FLOAT) {
+            tokensF32[operandOffset] = val;
+        } else {
+            tokensI32[operandOffset] = val;
         }
 
         tokensI32[modeOffset] = mode;

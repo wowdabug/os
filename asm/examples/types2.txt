@@ -1,3 +1,29 @@
-ba arr 3 0 1 2
+ia strs 6 "this" "is" "a" "certified" "hood" "classic"
+
+i i
+i addr
+i val
+
+load_i 0
+store i
+lbl l
+
+    load strs
+    add @i
+    store addr
+    deref @addr
+    store val
+
+    out_s @val
+    out_c '\n'
+
+load @i
+add_i 4
+store i
+cmp_i 24
+ifle
+jmp l
+flush
+halt
 
 halt

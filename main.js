@@ -1,7 +1,7 @@
 import { asm } from "./asm/main.js";
 
 async function main() {
-    const response = await fetch("asm/examples/strings.txt")
+    const response = await fetch("asm/examples/types2.txt")
     const text = await response.text();
 
     const program = asm.compile(text);

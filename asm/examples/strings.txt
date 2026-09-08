@@ -1,9 +1,6 @@
 s str "Hello, world!"
 i str2 "helo world"
 
-out_i @str2
-out_c '\n'
-
 out_s @str2
 out_c '\n'
 
@@ -14,7 +11,7 @@ i x 1
 out_i @x
 out_c '\n'
 
-b a "lol"
+ba arr 3 0 1 2
 
 flush
 
