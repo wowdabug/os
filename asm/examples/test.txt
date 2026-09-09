@@ -1,0 +1,35 @@
+ia strs 6 "this" "is" "an" "array" "of" "strings"
+
+ba bytes 3 0 1 2
+fa floats 3 1. 2. 3.
+
+out_f @floats
+out_c '\n'
+
+i i
+i addr
+f val
+
+load_i 0
+store i
+lbl loop
+
+load floats
+add @i
+store addr
+deref_f @addr
+store_f val
+
+out @addr
+out_c '\n'
+
+load @i
+add_i 4
+store i
+cmp_i 12
+ifle
+jmp loop
+
+flush
+
+halt

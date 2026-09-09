@@ -1,4 +1,10 @@
-ia strs 6 "this" "is" "a" "certified" "hood" "classic"
+# or a double pointer because of array-pointer equivalence
+ia strs 6 "this" "is" "an" "array" "of" "strings"
+
+ba bytes 3 0 1 2
+fa floats 3 1. 2. 3.
+
+out_f @floats
 
 i i
 i addr
@@ -15,6 +21,7 @@ lbl l
     store val
 
     out_s @val
+    out_c 'a'
     out_c '\n'
 
 load @i

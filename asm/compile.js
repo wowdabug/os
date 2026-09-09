@@ -6,7 +6,9 @@ import {
     TYPE_SIZES, 
     TYPE_SUFFIXES, 
     OP_MODES,
-    OP_TYPES 
+    OP_TYPES,
+    PRE_OP,
+    PRE_OP_TYPES
 } from './main.js';
 
 const ESCAPES = {
@@ -52,7 +54,7 @@ function getOpcode(str, type) {
         opcode = OP[str.toUpperCase()];
     }
 
-    if (!opcode) {
+    if (opcode == null) {
         throw new Error('invalid opcode: ' + str + ', ' + type)
     }
 
@@ -271,66 +273,6 @@ function allocStr(str) {
     }
 }
 
-function initVar(type, types, vals) {
-    if (vals.length === 0) { throw new Error('not enough args'); }
-    if ((type === TYPE.BYTE || type === TYPE.INT) && types[1] === TYPE.FLOAT) { throw new Error('invalid type'); }
-    const val = vals[1] || 0;
-    ensureRange(type, val);
-    const addr = alloc(TYPE_SIZES[type]);
-    staticData.push(getBytes(type, val), addr);
-    staticSymbols.set(vals[0], { type: type, val: addr }); 
-}
-
-function initArr(type, types, vals) {
-    if (vals.length < 2) { throw new Error('not enough args'); }
-    const size = vals[1];
-    if (types[1] === TYPE.FLOAT) { throw new Error('invalid size type'); }
-    ensureRange(TYPE.INT, size);
-    const addr = alloc(TYPE_SIZES[type] * size);
-    const bytes = [];
-    for (let i = 2; i < size + 2; ++i) { 
-        if ((type === TYPE.BYTE || type === TYPE.INT) && types[1] === TYPE.FLOAT) { throw new Error('invalid type'); }
-        const val = vals[i] || 0;
-        ensureRange(type, val);
-        bytes.push(...getBytes(type, val)); 
-    }
-
-    staticData.push(bytes, addr);
-    staticSymbols.set(vals[0], { type: type, val: addr }); 
-}
-
-// to be refactored
-// maybe put in main compile loop?
-const behaviors = {
-    b(types, vals) { initVar(TYPE.BYTE, types, vals); },
-    i(types, vals) { initVar(TYPE.INT, types, vals); },
-    f(types, vals) { initVar(TYPE.FLOAT, types, vals); },
-
-    c(types, vals) { 
-        if (vals.length < 2) { throw new Error('not enough args'); }
-        if (types[1] === TYPE.FLOAT) { throw new Error('invalid type'); }
-        const val = vals[1];
-        ensureRange(TYPE.BYTE, val);
-        staticSymbols.set(vals[0], { type: TYPE.BYTE, val: val }); 
-    },
-
-    s(types, vals) {
-        if (vals.length < 2) { throw new Error('not enough args'); }
-        if (types[1] === TYPE.FLOAT) { throw new Error('invalid type'); }
-        const val = vals[1];
-        ensureRange(TYPE.INT, val);
-        staticSymbols.set(vals[0], { type: TYPE.INT, val: val }); 
-    },
-
-    ba(types, vals) { initArr(TYPE.BYTE, types, vals); },
-    ia(types, vals) { initArr(TYPE.INT, types, vals); },
-    fa(types, vals) { initArr(TYPE.FLOAT, types, vals); },
-
-    lbl(types, vals, i) {
-        staticSymbols.set(vals[0], { type: TYPE.INT, value: i - 1 });
-    }
-};
-
 function ensureRange(type, val) {
     switch (type) {
         case TYPE.BYTE:
@@ -340,7 +282,7 @@ function ensureRange(type, val) {
             if (val < -2147483648 || val >= 2147483648) { throw new Error('int out of range'); }
             break;
         case TYPE.FLOAT:
-            if (!Number.isFinite(Math.fround(num))) { throw new Error(`float out of range`); }
+            if (!Number.isFinite(Math.fround(val))) { throw new Error(`float out of range`); }
             break;
     }
 }
@@ -371,7 +313,7 @@ export function compile(text) {
             continue;
         }
         
-        const preprocessor = Object.hasOwn(behaviors, opcode);
+        const pre = Object.hasOwn(PRE_OP, opcode.toUpperCase());
 
         let mode = MODE.NONE;
 
@@ -380,7 +322,7 @@ export function compile(text) {
         for (let i = 0; i < operands.length; ++i) {
             let operand = operands[i];
             if (operand[0] === '@') {
-                if (preprocessor) {
+                if (pre) {
                     throw new Error('preprocessor vals cannot be direct');
                 }
 
@@ -433,7 +375,9 @@ export function compile(text) {
                 }
 
             } else if ((parsed = parseVar(operand)) !== null) {
-                if (preprocessor) {
+                // there are no variables in the preprocessor
+                // so we just push the literal string
+                if (pre) {
                     types.push(TYPE.NONE);
                     vals.push(parsed);
                     continue;
@@ -459,9 +403,70 @@ export function compile(text) {
 
         }
 
-        if (preprocessor) {
+        if (pre) {
             if (typeof vals[0] !== 'string') { throw new Error('invalid symbol'); }
-            behaviors[opcode](types, vals, j);
+            
+            const preOpcodeId = PRE_OP[opcode.toUpperCase()];
+            if (preOpcodeId == null) {
+                throw new Error('invalid preprocessor opcode: ' + opcode);
+            }
+
+            const preOpcodeType = PRE_OP_TYPES[preOpcodeId];
+
+            switch (preOpcodeId) {
+                case PRE_OP.B:
+                case PRE_OP.I:
+                case PRE_OP.F: {
+                    if (vals.length === 0) { throw new Error('not enough args'); }
+                    if ((preOpcodeType === TYPE.BYTE || preOpcodeType === TYPE.INT) && types[1] === TYPE.FLOAT) { throw new Error('invalid type'); }
+                    const val = vals[1] || 0;
+                    ensureRange(preOpcodeType, val);
+                    const addr = alloc(TYPE_SIZES[preOpcodeType]);
+                    staticData.push(getBytes(preOpcodeType, val), addr);
+                    staticSymbols.set(vals[0], { type: preOpcodeType, val: addr }); 
+                    break;
+                }
+                    
+                case PRE_OP.S: {
+                    if (vals.length < 2) { throw new Error('not enough args'); }
+                    if (types[1] === TYPE.FLOAT) { throw new Error('invalid type'); }
+                    const val = vals[1];
+                    ensureRange(TYPE.INT, val);
+                    staticSymbols.set(vals[0], { type: TYPE.INT, val: val }); 
+                    break;
+                }
+                    
+                case PRE_OP.BA:
+                case PRE_OP.IA:
+                case PRE_OP.FA: {
+                    if (vals.length < 2) { throw new Error('not enough args'); }
+                    const size = vals[1];
+                    if (types[1] === TYPE.FLOAT) { throw new Error('invalid size type'); }
+                    ensureRange(TYPE.INT, size);
+                    const addr = alloc(TYPE_SIZES[preOpcodeType] * size);
+                    const bytes = [];
+                    for (let i = 2; i < size + 2; ++i) { 
+                        if ((preOpcodeType === TYPE.BYTE || preOpcodeType === TYPE.INT) && types[1] === TYPE.FLOAT) { throw new Error('invalid type'); }
+                        const val = vals[i] || 0;
+                        ensureRange(preOpcodeType, val);
+                        bytes.push(...getBytes(preOpcodeType, val)); 
+                    }
+
+                    staticData.push(bytes, addr);
+                    staticSymbols.set(vals[0], { type: preOpcodeType, val: addr }); 
+                    break;
+                }
+                    
+                case PRE_OP.LBL: {
+                    staticSymbols.set(vals[0], { type: TYPE.INT, val: j - 1 });
+                    break;
+                }
+
+                default: {
+                    throw new Error('no preprocessor opcode logic');
+                }
+            }
+
             continue;
         } else {
             ++j;
@@ -470,22 +475,25 @@ export function compile(text) {
         let type = types[0];
         let val = vals[0];
 
-        const opcodeId = getOpcode(opcode, type);
-        if (!opcodeId) {
-            throw new Error('unsupported type');
+        if (opcode === 'jmp') {
+            console.log(vals)
         }
 
-        const opcodeType = OP_TYPES[opcodeId];
+        const opcodeId = getOpcode(opcode, type);
+        let opcodeType = OP_TYPES[opcodeId];
+
         if (!type) {
             type = opcodeType;
         } else if (opcodeType != type) {
-            throw new Error('mismatched types: ' + opcodeType + ', ' + type);
+            // surely I won't regret this
+            //throw new Error('mismatched types: ' + opcode + ', ' + opcodeType + ', ' + type);
         }
 
         ensureRange(type, val);
 
-        if (type === TYPE.FLOAT) {
+        if (type === TYPE.FLOAT && mode === MODE.IMM) {
             tokensF32[operandOffset] = val;
+            console.log(operands[0] + ', ' + type + ', ' + tokensF32[operandOffset])
         } else {
             tokensI32[operandOffset] = val;
         }
@@ -498,6 +506,7 @@ export function compile(text) {
         debugTokens.push([tokensI32[modeOffset], tokensI32[typeOffset], opcode, tokensI32[opcodeOffset], operands[0], tokensI32[operandOffset]]);
     }
 
+    console.log(staticSymbols)
     console.log(debugTokens);
     console.log(performance.now() - start + ' ms');
 

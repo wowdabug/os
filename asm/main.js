@@ -178,12 +178,12 @@ export const OP_TYPES = {
     [OP.LOAD_B]: TYPE.BYTE,
     [OP.LOAD_I]: TYPE.INT,
     [OP.LOAD_F]: TYPE.FLOAT,
-    [OP.STORE_B]: TYPE.INT,
+    [OP.STORE_B]: TYPE.BYTE,
     [OP.STORE_I]: TYPE.INT,
-    [OP.STORE_F]: TYPE.INT,
-    [OP.DEREF_B]: TYPE.INT,
+    [OP.STORE_F]: TYPE.FLOAT,
+    [OP.DEREF_B]: TYPE.BYTE,
     [OP.DEREF_I]: TYPE.INT,
-    [OP.DEREF_F]: TYPE.INT,
+    [OP.DEREF_F]: TYPE.FLOAT,
     [OP.ADD_B]: TYPE.BYTE,
     [OP.ADD_I]: TYPE.INT,
     [OP.ADD_F]: TYPE.FLOAT,
@@ -237,6 +237,30 @@ export const OP_TYPES = {
     [OP.HALT]: TYPE.NONE,
     [OP.FLUSH]: TYPE.NONE
 };
+
+export const PRE_OP = {
+    NONE: 0,
+    B: 1,
+    I: 2,
+    F: 3,
+    S: 4,
+    BA: 5,
+    IA: 6,
+    FA: 7,
+    LBL: 8
+};
+
+export const PRE_OP_TYPES = {
+    [PRE_OP.NONE]: TYPE.NONE,
+    [PRE_OP.B]: TYPE.BYTE,
+    [PRE_OP.I]: TYPE.INT,
+    [PRE_OP.F]: TYPE.FLOAT,
+    [PRE_OP.S]: TYPE.NONE,
+    [PRE_OP.BA]: TYPE.BYTE,
+    [PRE_OP.IA]: TYPE.INT,
+    [PRE_OP.FA]: TYPE.FLOAT,
+    [PRE_OP.LBL]: TYPE.NONE
+}
 
 export const asm = {
     run,

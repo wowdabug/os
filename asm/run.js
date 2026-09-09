@@ -58,6 +58,7 @@ export function run(program) {
                     valI32 = memView.getInt32(operand, true);
                     break;
                 case TYPE.FLOAT:
+                    console.log(operand)
                     valF32 = memView.getFloat32(operand, true);
                     break;
             }
